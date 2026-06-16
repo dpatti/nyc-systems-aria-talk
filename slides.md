@@ -30,91 +30,178 @@ duration: 25min
 with a smidge of fault-tolerance
 
 <!--
-The last comment block of each slide will be treated as slide notes. It will be
-visible and editable in Presenter Mode along with the slide. [Read more in the
-docs](https://sli.dev/guide/syntax.html#notes)
+
+What do I mean by "fast", and more importantly "smidge" here?
+
+By fast I mean double-digit microsecond append times with 10G throughput, and by
+smidge I mean there are some situations we will never automatically recover from
+without a human.
+
+Hoping you take away some appreciation for the tradeoffs I'll discuss, even if
+they're a bit unfashionable.
+
+Slides are available online, link at the end
+
 -->
 
 ---
-layout: section
----
 
-# Intro
-
----
-
-# Opening
-
-- open: platform without automatic failover
-- my context
-- concession
+# Hi
 
 <!--
-Speaker notes
+
+Jane Street
+Signals and Threads
+Blog post
+
 -->
 
 ---
 
-# Intro to log / distributed log
-
-- log records: timestamp as seq num, topic for filtering, arbitrary payload & size, atomic primitive
-- primitives: total ordering, exactly-once delivery, atomics
-- exactly once: reading your own writes
-- mental model shifts from req/res to append/observe
-- one log, not chaining logs
+# A concession
 
 <!--
-Speaker notes
+
+I don't have an academic background, never took a distributed systems course. I
+learned everything on the fly. Here's a picture of me buying a book.
+
+- [ ] receipt
+
+This doesn't really matter, but it's maybe useful framing, because my
+experiences are lived and anecdotal.
+
 -->
 
 ---
 
-# Why not a database? / another log?
+<v-switch>
+<template #0>
 
-- kafka comparison w/ vertical vs horizontal
+# What is a log?
+
+- data structure sequence of records
+- append only
+
+</template>
+<template #1>
+
+# What is a distributed log?
+
+- data structure sequence of records
+- append only
+- can be appended to by multiple producers and read from by multiple consumers
+- everyone sees all records in the same order
+
+</template>
+</v-switch>
+
+<!-- Wedge a mention of Kafka in here somewhere? -->
+
+---
+
+# What is *our* distributed log?
+
+- everything in the previous tier plus...
+- filtering mechanism
+- exactly-once delivery
+- opt-in atomicity
+- our records look like this:
+
+  ```
+  |timestamp|topic|sender|flags|payload ...|
+  ```
+
+- it's more of a platform/service, for who?
 
 <!--
-Speaker notes
+
+If the utility of distributed logs is not super clear, bear with me for a
+minute. We're going to get there, but I think it could help to motivate the log
+architecture itself first.
+
+TODO maybe pull the "you get" and "have to read" sections out and talk about
+them after
+
 -->
 
 ---
 
-# Latency and throughput numbers
+# My favorite mental model
 
-- can I get lab to 10G?
+- all work goes in one totally-ordered log
+- the records on the log represent events or updates or actions
+- you have to read what you append
+- state machines operate on reads
+- your app is made up of different kinds of processes filtering and/or multiple
+  copies of the same kind coordinating with total order or atomics
+- so it's not really a request -> ack model, more of an append -> observe
 
-<!--
-Speaker notes
--->
-
----
-layout: section
----
-
-# Server
-
----
-
-# Single-node sequencer + injectors over shmem
-
-- sequencer: packet in -> stamp -> packet out
-- scaling through ingress (injectors) and egress (republishers)
-- herd protocol over UDP w/ retransmission
-- archival and retrieval
-- server coordination (control plane?) on the log too
-
-<!--
-Speaker notes
--->
+<!-- Nice thing about building the app this way is that it makes recovery
+     simpler. It's like multiplayer redux. -->
 
 ---
 
 # Invested in scaling over sharding
 
+- Total ordering means one process: a sequencer
+- Sharding means giving up total ordering
+- If everyone is thinking about the same log as the source of truth, we want to
+  make it big
+
+---
+
+# Latency and throughput numbers
+
+- Theoretically: 30us round trip times
+- Practically: depends on how far away from the cluster you are
+- Throughput: 10Gbps or 20Mt/s?
+
+<!--
+
+- [x] can I get lab to 10G?
+- [ ] what about small packets?
+- [ ] More realistic latency numbers when loaded? (try 1 in flight again?)
+
+-->
+
+---
+layout: section
+---
+
+# Architecture
+
+---
+
+# Architecture: simple sequencer
+
+<!--
+    Diagram: injectors (many) -> sequencer -> republishers (many) -> client -> injectors
+
+    clicks:
+    1. all animated
+    2. animate client -> inj (shm)
+    3. repub -> client (network)
+    4. animate inj -> seq -> repub
+-->
+
+- sequencer: packet in -> stamp -> packet out
+- scaling through ingress (injectors) and egress (republishers)
+- herd protocol over UDP w/ retransmission
+- server coordination (control plane?) on the log too
+
+<!--
+
+Speaker notes
+
+-->
+
+---
+
+# Architecture: low latency hot loop
+
 - non-scaling because single log is processed by each node (not inherent)
-- multicast + bare metal + low-latency card + OCaml user space networking
+- multicast + bare metal + low-latency nic + native user space networking
 - multicast is optimization, still have cloud presence
-- network bandwidth and tuning
 
 <!--
 Speaker notes
@@ -122,11 +209,11 @@ Speaker notes
 
 ---
 
-# Sequencer is single point of failure
+# Architecture: durability
 
 - no fsync or quorum
 - rule of 2
-- choose your own redundancy?
+- choose your own redundancy
 - latency: disk writes out of hot loop, ring buffer + backpressure gossip
 
 <!--
@@ -135,11 +222,13 @@ Speaker notes
 
 ---
 
-# No automated failovers if sequencer node goes down
+# Architecture: fault-tolerance?
 
+- redundancy everywhere except sequencer
 - consensus algorithms are easy to get wrong
 - hardware is more reliable than you think
-- not inherent, is changing soon
+- in practice, actual downtime is very low
+- but also: we're actively working on this
 
 <!--
 Speaker notes
@@ -148,6 +237,8 @@ Speaker notes
 ---
 
 # Putting it all together
+
+This is just a mermaid diagram copied from the intern talk as a test
 
 ```mermaid
 graph LR
@@ -211,45 +302,70 @@ in-memory buffers in the the hot loop, and asynchronous disk writes.
 layout: section
 ---
 
-# Client
+# Okay but what do you do with it
+
+<!-- Thinking about whether htis goes before or after architecture -->
 
 ---
 
-# Consensus from a single log
+# A sort of paradox
+
+- We wanted to make it really easy to use; primitives are pub/sub; component
+  architecture for composition
+- It is very flexible, if you know what you're doing
+- But people did some very cool things with it
+
+---
+
+# Distributed RocksDB
+
+- RocksDB is an embeddable persistent key-value store
+- What if we published operations on the log? And applied them once we consumed?
+- But if you want linearizability, you need to build that
+
+---
+
+# Global eventual consistency
+
+- Write to the log in your region for fast, persistent updates
+- Your region's log is relayed to a global log
+- Your region's view is the global log plus the unrelayed region tail
+
+---
+
+# The log as a blackbox
+
+- Time-travel interactive debugger -- with breakpoints
+- Replay into the same state machine for bug or performance analysis
+- Build one-off tools that use the log as a query
+
+---
+
+# Why not a database? / another log?
+
+- kafka comparison w/ vertical vs horizontal
+- we have historically been bad at databases
+- rich update language
+- cross-node coordination
+- fast online synchronization (vs db for historical processing)
+
+<!--
+Speaker notes
+-->
+
+---
+
+# These are miscellaneous notes that don't have a home
+
+## Consensus from a single log
 
 - like type systems eliminate a large class of bugs, same with building on aria
+- still need to reason through race conditions at send time, but not receive time
 
-<!--
-Speaker notes
--->
+## Latency and simple app design
 
----
-
-# Latency and simple app design
-
-- latency and simple app design
-
-<!--
-Speaker notes
--->
-
----
-
-# What can you do
-
-- simple motivator example?
-- building a distributed rocksdb
-- bring your own consistency model
-
-<!--
-Speaker notes
--->
-
----
-
-# Testing and replay story
-
-- testing and replay story
+- When your tail latency is predictable, you can design around it
+- No optimistic updates, no local caching
 
 <!--
 Speaker notes
@@ -259,13 +375,7 @@ Speaker notes
 layout: section
 ---
 
-# Conclusion
-
----
-
-# Future plans
-
-- future plans
+# it's over
 
 <!--
 Speaker notes
