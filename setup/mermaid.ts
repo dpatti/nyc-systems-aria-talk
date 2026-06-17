@@ -8,13 +8,31 @@ import elkLayouts from '@mermaid-js/layout-elk'
 // the diagrams were designed around (ported from the reveal.js deck).
 mermaid.registerLayoutLoaders(elkLayouts)
 
-export default defineMermaidSetup(() => {
-  return {
-    layout: 'elk',
+// Brighter accents pulled from the LogTape components (Tailwind 400/300 shades).
+// Higher contrast than a muted terminal palette, which reads better projected.
+const green = { base: '#4ade80', fill: '#4ade801f' } // green-400 + ~12% tint
+const blue = '#60a5fa' // blue-400
+
+// Deck-specific tones.
+const nodeBg = '#272822' // node fill — reads as a dark card on the ~#121212 slide
+const clusterBkg = '#1b1b1b' // muted panel, just above the ~#121212 slide bg
+
+// Semantic roles.
+const client = green // clients (`:::client`): producers/consumers
+const special = blue // core Aria nodes (`:::core`, `:::primary`, `box*`)
+const specialFill = '#60a5fa1f' // blue-400 ~12% tint
+const ink = '#e5e7eb' // edges, node borders, text (bright neutral)
+
+// Exported so AnimatedMermaid can initialize the singleton itself. Slidev only
+// applies this config when *it* renders a mermaid block, which may not have
+// happened yet on a fresh load — so a component rendering directly would get
+// unstyled output until the first navigation.
+export const mermaidConfig = {
+  layout: 'elk',
     elk: {
       // dpatti: It's not clear which of these are actually working; the
       // mermaid elk integration seems to be questionable.
-      cycleBreakingStrategy: 'MODEL_ORDER',
+      cycleBreakingStrategy: 'GREEDY_MODEL_ORDER',
       considerModelOrder: 'PREFER_NODES',
       forceNodeModelOrder: true,
     },
@@ -27,28 +45,33 @@ export default defineMermaidSetup(() => {
     themeCSS: `
       .edge-pattern-solid { stroke-width: 2px; }
       .edge-pattern-dotted { stroke-width: 2px; }
-      [id*="box"] > rect, [id*="box"] > .basic { stroke: #bf79db; stroke-width: 2px; }
+      [id*="box"] > rect, [id*="box"] > .basic { stroke: ${special}; stroke-width: 2px; }
       .disk .nodeLabel { display: inline-block; min-width: 40px; }
       .primary .nodeLabel { font-weight: bold; }
-      .primary > rect, .primary > .basic { stroke-width: 4px; }
+      .core rect, .core .basic, .core path, .core polygon,
+      .primary rect, .primary .basic, .primary path, .primary polygon { stroke: ${special}; fill: ${specialFill}; }
+      .client rect, .client .basic, .client path, .client polygon { stroke: ${client.base}; fill: ${client.fill}; }
     `,
     themeVariables: {
       darkMode: true,
-      background: '#272822',
+      background: nodeBg,
 
-      primaryColor: '#272822',
-      primaryTextColor: '#ddd',
-      primaryBorderColor: '#eee',
-      lineColor: '#eee',
+      primaryColor: nodeBg,
+      primaryTextColor: ink,
+      primaryBorderColor: ink,
+      lineColor: ink,
 
-      secondaryColor: '#272822',
-      secondaryBorderColor: '#ddd',
+      secondaryColor: nodeBg,
+      secondaryBorderColor: ink,
 
-      tertiaryColor: '#272822',
+      tertiaryColor: nodeBg,
 
-      clusterBorder: '#666',
-      edgeLabelBackground: '#272822',
+      clusterBkg,
+      clusterBorder: '#9ca3af',
+      edgeLabelBackground: nodeBg,
       fontSize: '24px',
     },
-  }
-})
+}
+
+export default defineMermaidSetup(() => mermaidConfig)
+
