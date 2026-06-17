@@ -11,7 +11,7 @@ withDefaults(
   {
     cells: 8,
     filled: 5,
-    incoming: 'rec',
+    incoming: '5',
   },
 )
 </script>

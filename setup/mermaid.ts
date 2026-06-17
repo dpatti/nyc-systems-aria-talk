@@ -22,6 +22,7 @@ const client = green // clients (`:::client`): producers/consumers
 const special = blue // core Aria nodes (`:::core`, `:::primary`, `box*`)
 const specialFill = '#60a5fa1f' // blue-400 ~12% tint
 const ink = '#e5e7eb' // edges, node borders, text (bright neutral)
+const dim = '#6b7280'
 
 // Exported so AnimatedMermaid can initialize the singleton itself. Slidev only
 // applies this config when *it* renders a mermaid block, which may not have
@@ -32,8 +33,8 @@ export const mermaidConfig = {
     elk: {
       // dpatti: It's not clear which of these are actually working; the
       // mermaid elk integration seems to be questionable.
-      cycleBreakingStrategy: 'GREEDY_MODEL_ORDER',
-      considerModelOrder: 'PREFER_NODES',
+      cycleBreakingStrategy: 'MODEL_ORDER',
+      considerModelOrder: 'NODES',
       forceNodeModelOrder: true,
     },
     startOnLoad: false,
@@ -51,6 +52,7 @@ export const mermaidConfig = {
       .core rect, .core .basic, .core path, .core polygon,
       .primary rect, .primary .basic, .primary path, .primary polygon { stroke: ${special}; fill: ${specialFill}; }
       .client rect, .client .basic, .client path, .client polygon { stroke: ${client.base}; fill: ${client.fill}; }
+      .inactive { opacity: 0.4; }
     `,
     themeVariables: {
       darkMode: true,

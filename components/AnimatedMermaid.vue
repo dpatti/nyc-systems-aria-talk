@@ -3,7 +3,7 @@
 // the edge ids (e1, e2, ...) first appear in `code`. The diagram is declared
 // once by the caller; we just append `eN@{ animate: true }` for the revealed
 // edges and re-render. Edges are always declared, so layout is stable.
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted, useId } from 'vue'
 import { useSlideContext } from '@slidev/client'
 import mermaid from 'mermaid/dist/mermaid.esm.mjs'
 // Importing the setup module registers the ELK loader on this same singleton;
@@ -19,7 +19,18 @@ mermaid.initialize(mermaidConfig)
 const props = defineProps<{ code: string; steps?: string[][] }>()
 const { $clicks } = useSlideContext()
 const el = ref<HTMLDivElement>()
+// Unique per instance: presenter mode mounts several AnimatedMermaids at once,
+// and a shared render id collides on mermaid's singleton (missing/overlaid
+// renders). useId() namespaces this instance; n disambiguates re-renders.
+const uid = useId()
 let n = 0
+
+// Off-flow host for mermaid's temporary measurement <svg>. Without a container,
+// mermaid appends it to <body>, which flashes and jitters the page on re-render
+// (notably when [click] notes add re-renders). Fixed + hidden keeps it out of
+// layout; staying outside the scaled slide keeps getBBox measurements correct
+// (using `el` instead would mis-size fonts).
+let host: HTMLDivElement | undefined
 
 const DIM = '#6b7280' // gray-500 — non-animated edges while a segment is active
 
@@ -58,14 +69,20 @@ async function render() {
   const c = $clicks.value ?? 0
   const active = props.steps ? (props.steps[c - 1] ?? []) : edges.slice(0, c)
   const anim = active.map((e) => `${e}@{ animate: true }`).join('\n')
-  const { svg } = await mermaid.render(`anim-mermaid-${n++}`, `${props.code}\n${anim}`)
+  const { svg } = await mermaid.render(`mermaid-${uid}-${n++}`, `${props.code}\n${anim}`, host)
   if (el.value) {
     el.value.innerHTML = svg
     dimOthers(el.value)
   }
 }
 
-onMounted(render)
+onMounted(() => {
+  host = document.createElement('div')
+  host.style.cssText = 'position:fixed;top:0;left:0;visibility:hidden;pointer-events:none'
+  document.body.appendChild(host)
+  render()
+})
+onUnmounted(() => host?.remove())
 watch(() => $clicks.value, render)
 </script>
 

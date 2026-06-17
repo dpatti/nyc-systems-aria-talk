@@ -43,6 +43,8 @@ they're a bit unfashionable.
 
 Slides are available online, link at the end
 
+- [ ] really get intro down
+
 -->
 
 ---
@@ -54,17 +56,23 @@ routeAlias: hi
 <!--
 
 - Jane Street
-- work on Aria
+- work on a distributed log called "Aria"
 - Signals and Threads
 - Blog post
 
 -->
 
 ---
-routeAlias: concession
+routeAlias: confession
 ---
 
-# A concession
+# A confession
+
+<!--
+
+- [ ] why are these so tinted?
+
+-->
 
 <v-click>
 
@@ -78,8 +86,6 @@ routeAlias: concession
 I don't have an academic background, never took a distributed systems course. I
 learned everything on the fly. Here's a picture of me buying a book.
 
-- [ ] receipt
-
 - 11 days after agreeing to this talk
 
 This doesn't really matter, but it's maybe useful framing, because my
@@ -91,84 +97,158 @@ experiences are lived and anecdotal.
 routeAlias: what-is-a-log
 ---
 
-<v-switch>
-<template #0>
-
 # What is a log?
-
-- append-only data file
-- sequence of records
-- read from offset
-
-<!--
-- restarts
-- state machine
--->
 
 <LogTape class="mt-16" />
 
-</template>
-<template #1>
+<!--
+- append-only data file
+- here we have records
+- state machines / determinism built on log data
+- Example: database WAL
+-->
+
+---
+routeAlias: what-is-a-distributed-log
+---
 
 # What is a distributed log?
 
-- data structure sequence of records
-- append only
-- can be appended to by multiple producers and read from by multiple consumers
-- everyone sees all records in the same order
-
 <DistributedLogTape class="mt-16" />
-
-</template>
-</v-switch>
 
 <!--
 
-- build a state machine
-- multi-player redux
-- Kafka is example
-- Databases use for WAL and replication
-- Totally ordered is the most important property
+- it's the multiplayer version of logs
+- everyone sees all records in the same order
+- Kafka is example, Databases also love these (e.g., replication log)
+- option: write events for downstream readers
+
+-->
+
+---
+routeAlias: obsessed
+---
+
+# Jane Street is a bit obsessed with logs
+
+and historically allergic to databases
+
+<!--
+
+- Aria is not the first (or second or third) log abstraction we've built
+- We do USE dbs, but they're not the easy thing to reach for
+- (though this is changing)
+- The two are not incompatible!
+
+-->
+
+---
+routeAlias: mental-model
+---
+
+# A mental model for building on a distributed log
+
+<!-- Maybe diagram -->
+
+1. Start with a distributed log with a total ordering
+1. You build a state machine with some kind of update language
+1. You subscribe to some subset of the log
+1. You append updates you intend to make to the log
+1. You read back all updates from your subscriptions and process them
+1. You occasionally take a snapshot of your state machine along with where in
+   the log it was taken
+
+<!--
+
+- You do not process your update at the time you send it
+- You don't wait for an "ack" for an append
+- You get the ability to recover quite easily, even mid-operation
+- There's something really satisfying about the purity of state machines and
+  your ability to reason about them
+- You can build hot-hot replicas really easily
+- You have a framework for thinking about race conditions
 
 > Ordering is consensus. All race conditions are settled with the log. e.g.,
 > two people buying tickets for a concert - who wins? whoever came first on the
 > log. and importantly, all nodes in the system can agree on that.
 
-- "what can you do??" -> later
+Downsides:
+
+- You still have to deal with I/O
+- ...
 
 -->
 
 ---
-routeAlias: ideal-vs-reality
+routeAlias: dreams-and-reality
 ---
 
-# Ideal vs Reality
+# Dreams and reality
 
-- the more ordering we have, the more we can reason about our system
-- the more ordering we have, the more expensive it is to append to and read from
+## Total ordering is great
+
+- Useful foundation to build simple and complex apps alike
+
+## Total ordering is hard
+
+- The easiest way to scale is to shard, and when you do that, you give up total
+  ordering (kinda)
+
+- It's easier to build on fast and responsive logs
+
+- The utility goes down the more you have to compromise
 
 <!--
 
-- Many systems try to resolve this with sharding
-- Sharding gives up on ordering
+- [ ] Total ordering means one process: a sequencer
+- [ ] "maximize total ordering"
+- If everyone is thinking about the same log as the source of truth, we want to
+  make it big
 
 -->
 
 ---
-routeAlias: solution
+routeAlias: aria-goal
 ---
 
-# Solution
+# We made Aria to be generally useful
 
-- Cheap appends
-- Filtering
+How far can we push fast, low-latency total ordering without sharding?
+
+1. Speed
+1. Scale
+1. Reliability
+1. Suitable for us
+
+## Latency and throughput numbers
+
+- Theoretically: 30us round trip times
+- Practically: depends on how far away from the cluster you are
+- Throughput: 10Gbps or ~20M appends/s
+
+## But a quick reality check
+
+This isn't like, the backbone of Jane Street or something
+
+<!--
+
+Reliable: availability, latency (tails), durability
+
+latency: kind of low because it's JS
+
+But also: there's not just "one" Aria: each region has at least one, some
+special use-cases get one, some in trading datacenters, some in the cloud
+
+-->
 
 ---
-routeAlias: cheap-appends
+routeAlias: architecting-for-speed
 clicks: 5
 ---
 
-# Cheap appends
+# Architecting for speed
+
+You need a sequencer, so keep it simple
 
 <script setup>
 const cheapAppends = `
@@ -194,247 +274,148 @@ graph LR
 
 <AnimatedMermaid :code="cheapAppends" :steps="[['e1'], ['e2'], ['e3', 'e4'], ['e5', 'e6', 'e7'], ['e1', 'e2', 'e3', 'e4', 'e5']]" />
 
-<!--
-
-There are two problems with this: it doesn't scale, and it's not fault-tolerant.
-Let's improve the scaling first. The biggest problem is read fanout.
-
--->
-
----
-routeAlias: durability
----
-
-# Durability
-
-```mermaid
-graph LR
-  producers:::client@{ shape: st-rect, label: "clients" }
-  subgraph Aria
-    injectors:::core@{ shape: st-rect, label: "injectors" }
-    sequencer:::primary@{ shape: rect, label: "sequencer" }
-    publishers:::core@{ shape: st-rect, label: "publishers" }
-    disk:::disk@{ shape: cyl, label: " " }
-    injectors e2@--> sequencer
-    sequencer e3@--> disk
-    disk e4@--> publishers
-  end
-  subgraph Aria 2
-    injectors:::core@{ shape: st-rect, label: "injectors" }
-    sequencer:::primary@{ shape: rect, label: "sequencer" }
-    publishers:::core@{ shape: st-rect, label: "publishers" }
-    disk:::disk@{ shape: cyl, label: " " }
-    injectors e2@--> sequencer
-    sequencer e3@--> disk
-    disk e4@--> publishers
-  end
-  subgraph Aria 3
-    injectors:::core@{ shape: st-rect, label: "injectors" }
-    sequencer:::primary@{ shape: rect, label: "sequencer" }
-    publishers:::core@{ shape: st-rect, label: "publishers" }
-    disk:::disk@{ shape: cyl, label: " " }
-    injectors e2@--> sequencer
-    sequencer e3@--> disk
-    disk e4@--> publishers
-  end
-  consumers-1:::client@{ shape: st-rect, label: "clients" }
-  consumers-2:::client@{ shape: st-rect, label: "clients" }
-  producers e1@--> injectors
-  publishers e5@--> producers
-  publishers e6@--> consumers-1
-  publishers e7@--> consumers-2
-```
-
-<!--
-
-There are two problems with this: it doesn't scale, and it's not fault-tolerant.
-Let's improve the scaling first. The biggest problem is read fanout.
-
--->
-
----
-routeAlias: science
----
-
+<div class="text-center mt-6 text-xl op80">
 <v-switch>
 <template #0>
 
+TODO: intro — the shape of a single Aria cluster
 
 </template>
 <template #1>
 
-```mermaid
-graph LR
-  client-1@{ shape: st-rect, label: "client" }
-  client-2@{ shape: st-rect, label: "client" }
-  client-3@{ shape: st-rect, label: "client" }
-  subgraph Aria
-    broker-1@{ shape: st-rect, label: "broker" }
-    broker-2@{ shape: st-rect, label: "broker" }
-    broker-3@{ shape: st-rect, label: "broker" }
-    log:::primary@{ shape: rect, label: "log" }
-    disk:::disk@{ shape: cyl, label: " " }
-    log --> disk
-    broker-1 --> log
-    broker-2 --> log
-    broker-3 --> log
-  end
-  client-1 --> broker-1
-  client-2 --> broker-2
-  client-3 --> broker-3
-```
+TODO: step 1 — clients send appends to the injectors
 
-<!-- We added some brokers to protect the log, but what did they actually do if
-they stil have to go to the log which has the disk? -->
+</template>
+<template #2>
+
+TODO: step 2 — injectors hand off to the sequencer
+
+</template>
+<template #3>
+
+TODO: step 3 — sequencer stamps and persists to disk
+
+</template>
+<template #4>
+
+TODO: step 4 — publishers fan out to clients
+
+</template>
+<template #5>
+
+TODO: step 5 — the full append loop
 
 </template>
 </v-switch>
-
----
-routeAlias: our-log
----
-
-# What is *our* distributed log?
-
-it's Aria
-
-- everything in the previous tier plus...
-- filtering mechanism
-- exactly-once delivery
-- opt-in atomicity
-- it's a generic platform
+</div>
 
 <!--
 
-If the utility of distributed logs is not super clear, bear with me for a
-minute. We're going to get there, but I think it could help to motivate the log
-architecture itself first.
-
-- our records look like this:
-
-  ```
-  |timestamp|topic|sender|flags|payload ...|
-  ```
--->
-
----
-routeAlias: mental-model
----
-
-# My favorite mental model
-
-- all work goes in one totally-ordered log
-- the records on the log represent events or updates or actions
-- you have to read what you append
-- state machines operate on reads
-- your app is made up of different kinds of processes filtering and/or multiple
-  copies of the same kind coordinating with total order or atomics
-- so it's not really a request -> ack model, more of an append -> observe
-
-<!-- Nice thing about building the app this way is that it makes recovery
-     simpler. It's like multiplayer redux. -->
-
----
-routeAlias: vertical-over-horizontal
----
-
-# Invested in vertical scaling over horizontal
-
-- Total ordering means one process: a sequencer
-- Sharding means giving up total ordering
-- If everyone is thinking about the same log as the source of truth, we want to
-  make it big
-
----
-routeAlias: latency-throughput
----
-
-# Latency and throughput numbers
-
-- Theoretically: 30us round trip times
-- Practically: depends on how far away from the cluster you are
-- Throughput: 10Gbps or 20Mt/s?
-
-## But a quick realism check
-
-This isn't like, the backbone of Jane Street or something
-
-<!--
-
-- [x] can I get lab to 10G?
-- [ ] what about small packets?
-- [ ] More realistic latency numbers when loaded? (try 1 in flight again?)
-
--->
-
----
-layout: section
-routeAlias: architecture
----
-
-# Architecture
-
----
-routeAlias: arch-sequencer
----
-
-# Architecture: simple sequencer
-
-<!--
-    Diagram: injectors (many) -> sequencer -> publishers (many) -> client -> injectors
-
-    clicks:
-    1. all animated
-    2. animate client -> inj (shm)
-    3. pub -> client (network)
-    4. animate inj -> seq -> pub
--->
-
-- sequencer: packet in -> stamp -> packet out
+- sequencer simple; push complication out
 - scaling through ingress (injectors) and egress (publishers)
-- herd protocol over UDP w/ retransmission
-- server coordination (control plane?) on the log too
+- [ ] "stamp with a timestamp" -> ??
+- (?) server coordination (control plane?) on the log too
 
-<!--
+- [ ] fill out click footers above?
+- [ ] use click notes below
 
-Speaker notes
+[click:2] 2
+
+[click] 3
+
+- [ ] talk about bare metal, userspace networking, specialized nics
+
+
+I can't tell if latency should be its own section after this, or just talked
+about between these two, or after the next one (since it introduces the extra
+hop).
 
 -->
 
 ---
-routeAlias: arch-hot-loop
+routeAlias: architecting-for-durability
 ---
 
-# Architecture: low latency hot loop
+# Architecting for durability
 
+Putting bounds on data loss
+
+<div class="flex justify-center">
+
+```mermaid {scale: 0.8}
+graph LR
+  subgraph clients [" "]
+    producers:::client@{ shape: st-rect, label: "clients" }
+    consumers-1:::client@{ shape: st-rect, label: "clients" }
+    consumers-2:::client@{ shape: st-rect, label: "clients" }
+  end
+  subgraph aria [" "]
+    subgraph node-1 [" "]
+      injectors-1:::core@{ shape: st-rect, label: "injectors" }
+      sequencer-1:::primary@{ shape: rect, label: "sequencer" }
+      publishers-1:::inactive@{ shape: st-rect, label: "publishers" }
+      disk-1:::disk@{ shape: cyl, label: " " }
+      injectors-1 e2@--> sequencer-1
+      sequencer-1 e3@--> disk-1
+      disk-1 e4@--> publishers-1
+    end
+    subgraph node-2 [" "]
+      injectors-2:::inactive@{ shape: st-rect, label: "injectors" }
+      sequencer-2:::inactive@{ shape: rect, label: "sequencer" }
+      publishers-2:::core@{ shape: st-rect, label: "publishers" }
+      disk-2:::disk@{ shape: cyl, label: " " }
+      injectors-2 e8@--> sequencer-2
+      sequencer-2 e9@--> disk-2
+      disk-2 e10@--> publishers-2
+    end
+    subgraph node-3 [" "]
+      injectors-3:::inactive@{ shape: st-rect, label: "injectors" }
+      sequencer-3:::inactive@{ shape: rect, label: "sequencer" }
+      publishers-3:::core@{ shape: st-rect, label: "publishers" }
+      disk-3:::disk@{ shape: cyl, label: " " }
+      injectors-3 e11@--> sequencer-3
+      sequencer-3 e12@--> disk-3
+      disk-3 e13@--> publishers-3
+    end
+    %% node-3 --> node-2
+    %% node-2 --> node-1
+  end
+  %% subgraph test
+  %%   test-1
+  %% end
+  %% test-1 ~~~ injectors-1 & injectors-2 & injectors-3
+  producers e1@--> injectors-1
+  publishers-2 --> producers
+  publishers-2 e6@--> consumers-1
+  publishers-3 --> consumers-1
+  publishers-3 e7@--> consumers-2
+  %% sequencer-2 --> disk-1 & disk-3
+```
+
+</div>
+
+<!--
+
+- [ ] needs clicks
+- [ ] herd / multicast to keep strain off sequencer/network
+- rule of 2
+- latency: disk writes out of hot loop, ring buffer + backpressure gossip
 - non-scaling because single log is processed by each node (not inherent)
 - multicast + bare metal + low-latency nic + native user space networking
 - multicast is optimization, still have cloud presence
+- [ ] latency here?
 
-<!--
-Speaker notes
 -->
 
 ---
-routeAlias: arch-durability
+routeAlias: fault-tolerance
 ---
 
-# Architecture: durability
+# Fault tolerance
 
-- no fsync or quorum
-- rule of 2
-- choose your own redundancy
-- latency: disk writes out of hot loop, ring buffer + backpressure gossip
+And the uglier truths
 
 <!--
-Speaker notes
--->
-
----
-routeAlias: arch-fault-tolerance
----
-
-# Architecture: fault-tolerance?
 
 - redundancy everywhere except sequencer
 - consensus algorithms are easy to get wrong
@@ -442,74 +423,29 @@ routeAlias: arch-fault-tolerance
 - in practice, actual downtime is very low
 - but also: we're actively working on this
 
-<!--
-Speaker notes
+- [ ] failure mode for >1 node loss
+    - no quorum
+    - datacenter loss
+    - "press the button" is a bit reductive
+        - "built the thing ourselves" tie-in
+    - JS uptime requirements are different
+    - good correlation between developer availability and uptime value
+    - choose your own redundancy
+- [ ] actual downtime numbers
+
 -->
 
 ---
-routeAlias: putting-it-together
+layout: section
+routeAlias: drawbacks
 ---
 
-# Putting it all together
-
-This is just a mermaid diagram copied from the intern talk as a test
-
-```mermaid
-graph LR
-  subgraph Aria
-    subgraph box1 [" "]
-      injectors@{ shape: st-rect }
-      sequencer:::primary
-      buffer@{ shape: stadium }
-      disk-1:::disk@{ shape: cyl, label: " " }
-      injectors e1@--> sequencer
-      sequencer e2@--> buffer
-      buffer e3@--> disk-1
-    end
-    subgraph box2 [" "]
-      buffer-2@{ shape: stadium, label: "buffer" }
-      disk-2:::disk@{ shape: cyl, label: " " }
-      publisher-2@{ shape: st-rect, label: "publishers" }
-      buffer-2 e5@--> disk-2
-      buffer-2 e6@--> publisher-2
-    end
-    subgraph box3 [" "]
-      buffer-3@{ shape: stadium, label: "buffer" }
-      disk-3:::disk@{ shape: cyl, label: " " }
-      publisher-3@{ shape: st-rect, label: "publishers" }
-      buffer-3 e7@--> disk-3
-      buffer-3 e8@--> publisher-3
-    end
-    mcast@{ shape: circle, label: " " }
-    buffer e9@-.- mcast
-    mcast e10@-.- buffer-2
-    mcast e11@-.- buffer-3
-  end
-  apps@{ shape: st-rect }
-  publisher-2 e12@--> apps
-  publisher-3 e13@--> apps
-  apps e14@--> injectors
-
-  e1@{ animate: true }
-  e2@{ animate: true }
-  e3@{ animate: true }
-  e5@{ animate: true }
-  e6@{ animate: true }
-  e7@{ animate: true }
-  e8@{ animate: true }
-  e9@{ animate: true }
-  e10@{ animate: true }
-  e11@{ animate: true }
-  e12@{ animate: true }
-  e13@{ animate: true }
-  e14@{ animate: true }
-```
+# Bottlenecks
 
 <!--
-Putting everything together, we have a bunch of boxes, with injectors on the
-active sequencer box, and publishers on the others, multicast connecting them,
-in-memory buffers in the the hot loop, and asynchronous disk writes.
-(Backpressure is elided for visual simplicity.)
+
+- [ ] bottlenecks: sequencer, but also full fleet
+
 -->
 
 ---
@@ -517,7 +453,7 @@ layout: section
 routeAlias: usage
 ---
 
-# Okay but what do you do with it
+# All this for state machine replication
 
 <!-- Thinking about whether htis goes before or after architecture -->
 
@@ -556,31 +492,24 @@ routeAlias: eventual-consistency
 routeAlias: blackbox
 ---
 
-# The log as a blackbox
+# The log as a history
 
 - Time-travel interactive debugger -- with breakpoints
 - Replay into the same state machine for bug or performance analysis
 - Build one-off tools that use the log as a query
 
+<!-- Might cut this -->
+
 ---
-routeAlias: why-not-database
+layout: section
+routeAlias: end
 ---
 
-# Why not a database? / another log?
+# it's over
 
-- kafka comparison w/ vertical vs horizontal
-- we have historically been bad at databases
-- rich update language
-- cross-node coordination
-- fast online synchronization (vs db for historical processing)
+---
 
 <!--
-Speaker notes
--->
-
----
-routeAlias: misc
----
 
 # These are miscellaneous notes that don't have a home
 
@@ -594,17 +523,4 @@ routeAlias: misc
 - When your tail latency is predictable, you can design around it
 - No optimistic updates, no local caching
 
-<!--
-Speaker notes
--->
-
----
-layout: section
-routeAlias: end
----
-
-# it's over
-
-<!--
-Speaker notes
 -->
