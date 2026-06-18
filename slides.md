@@ -53,6 +53,8 @@ routeAlias: hi
 
 # Hi
 
+I'm Doug
+
 <!--
 
 - Jane Street
@@ -67,19 +69,10 @@ routeAlias: confession
 ---
 
 # A confession
+[](no-subtitle-hack)
 
-<!--
-
-- [ ] why are these so tinted?
-
--->
-
-<v-click>
-
-![](./receipt.png){class="inline-block h-80 mr-8 mt-8 shadow"}
-![](./ddia.png){class="inline-block h-80 mt-8 shadow"}
-
-</v-click>
+![](./receipt.png){v-click="", class="inline-block h-80 mr-8 mt-8 shadow"}
+![](./ddia.png){v-click="", class="inline-block h-80 mt-8 shadow"}
 
 <!--
 
@@ -126,6 +119,7 @@ routeAlias: what-is-a-distributed-log
 -->
 
 ---
+layout: center
 routeAlias: obsessed
 ---
 
@@ -144,19 +138,12 @@ and historically allergic to databases
 
 ---
 routeAlias: mental-model
+clicks: 10
 ---
 
 # A mental model for building on a distributed log
 
-<!-- Maybe diagram -->
-
-1. Start with a distributed log with a total ordering
-1. You build a state machine with some kind of update language
-1. You subscribe to some subset of the log
-1. You append updates you intend to make to the log
-1. You read back all updates from your subscriptions and process them
-1. You occasionally take a snapshot of your state machine along with where in
-   the log it was taken
+<MentalModel />
 
 <!--
 
@@ -180,22 +167,25 @@ Downsides:
 -->
 
 ---
+layout: two-cols-header
 routeAlias: dreams-and-reality
 ---
 
 # Dreams and reality
 
+::left::
+
 ## Total ordering is great
 
 - Useful foundation to build simple and complex apps alike
+
+::right::
 
 ## Total ordering is hard
 
 - The easiest way to scale is to shard, and when you do that, you give up total
   ordering (kinda)
-
 - It's easier to build on fast and responsive logs
-
 - The utility goes down the more you have to compromise
 
 <!--
@@ -253,16 +243,17 @@ You need a sequencer, so keep it simple
 <script setup>
 const cheapAppends = `
 graph LR
-  producers:::client@{ shape: st-rect, label: "clients" }
-  subgraph Aria
+  subgraph aria [" "]
     injectors:::core@{ shape: st-rect, label: "injectors" }
     sequencer:::primary@{ shape: rect, label: "sequencer" }
     publishers:::core@{ shape: st-rect, label: "publishers" }
     disk:::disk@{ shape: cyl, label: " " }
+    class disk core
     injectors e2@--> sequencer
     sequencer e3@--> disk
     disk e4@--> publishers
   end
+  producers:::client@{ shape: st-rect, label: "clients" }
   consumers-1:::client@{ shape: st-rect, label: "clients" }
   consumers-2:::client@{ shape: st-rect, label: "clients" }
   producers e1@--> injectors
@@ -344,52 +335,67 @@ Putting bounds on data loss
 
 ```mermaid {scale: 0.8}
 graph LR
-  subgraph clients [" "]
+    classDef inactive-edge opacity:0.2
     producers:::client@{ shape: st-rect, label: "clients" }
     consumers-1:::client@{ shape: st-rect, label: "clients" }
     consumers-2:::client@{ shape: st-rect, label: "clients" }
-  end
-  subgraph aria [" "]
-    subgraph node-1 [" "]
-      injectors-1:::core@{ shape: st-rect, label: "injectors" }
-      sequencer-1:::primary@{ shape: rect, label: "sequencer" }
-      publishers-1:::inactive@{ shape: st-rect, label: "publishers" }
-      disk-1:::disk@{ shape: cyl, label: " " }
-      injectors-1 e2@--> sequencer-1
-      sequencer-1 e3@--> disk-1
-      disk-1 e4@--> publishers-1
+    subgraph aria [" "]
+      subgraph node-1 [" "]
+        injectors-1:::core@{ shape: st-rect, label: "injectors" }
+        sequencer-1:::primary@{ shape: rect, label: "sequencer-1" }
+        publishers-1:::inactive@{ shape: st-rect, label: "publishers" }
+        disk-1:::disk@{ shape: cyl, label: " " }
+        class disk-1 core
+        injectors-1 e2@--> sequencer-1
+        sequencer-1 e3@--> disk-1
+        disk-1 e4@-.-> publishers-1
+        class e4 inactive-edge
+      end
+      subgraph node-2 [" "]
+        injectors-2:::inactive@{ shape: st-rect, label: "injectors" }
+        sequencer-2:::inactive@{ shape: rect, label: "sequencer-2" }
+        publishers-2:::core@{ shape: st-rect, label: "publishers" }
+        disk-2:::disk@{ shape: cyl, label: " " }
+        class disk-2 core
+        injectors-2 e8@-.-> sequencer-2
+        sequencer-2 e9@-.-> disk-2
+        disk-2 e10@--> publishers-2
+        class e8,e9 inactive-edge
+      end
+      subgraph node-3 [" "]
+        injectors-3:::inactive@{ shape: st-rect, label: "injectors" }
+        sequencer-3:::inactive@{ shape: rect, label: "sequencer-3" }
+        publishers-3:::core@{ shape: st-rect, label: "publishers" }
+        disk-3:::disk@{ shape: cyl, label: " " }
+        class disk-3 core
+        injectors-3 e11@-.-> sequencer-3
+        sequencer-3 e12@-.-> disk-3
+        disk-3 e13@--> publishers-3
+        class e11,e12 inactive-edge
+      end
+      network
     end
-    subgraph node-2 [" "]
-      injectors-2:::inactive@{ shape: st-rect, label: "injectors" }
-      sequencer-2:::inactive@{ shape: rect, label: "sequencer" }
-      publishers-2:::core@{ shape: st-rect, label: "publishers" }
-      disk-2:::disk@{ shape: cyl, label: " " }
-      injectors-2 e8@--> sequencer-2
-      sequencer-2 e9@--> disk-2
-      disk-2 e10@--> publishers-2
-    end
-    subgraph node-3 [" "]
-      injectors-3:::inactive@{ shape: st-rect, label: "injectors" }
-      sequencer-3:::inactive@{ shape: rect, label: "sequencer" }
-      publishers-3:::core@{ shape: st-rect, label: "publishers" }
-      disk-3:::disk@{ shape: cyl, label: " " }
-      injectors-3 e11@--> sequencer-3
-      sequencer-3 e12@--> disk-3
-      disk-3 e13@--> publishers-3
-    end
+    %% aria is only a layout container; hide its panel
+    style aria fill:none,stroke:none
+    %% mcast@{ label: " " }
+    %% mcast ~~~ node-1 & node-2 & node-3
+    %% mcast --> disk-2
+    %% mcast --> disk-3
+    %% node-1 & node-2 & node-3 -.- anchor
     %% node-3 --> node-2
     %% node-2 --> node-1
-  end
-  %% subgraph test
-  %%   test-1
-  %% end
-  %% test-1 ~~~ injectors-1 & injectors-2 & injectors-3
   producers e1@--> injectors-1
-  publishers-2 --> producers
-  publishers-2 e6@--> consumers-1
-  publishers-3 --> consumers-1
-  publishers-3 e7@--> consumers-2
-  %% sequencer-2 --> disk-1 & disk-3
+  publishers-1 ~~~ producers
+  publishers-2 --> producers & consumers-1
+  publishers-3 --> consumers-2
+  network ~~~ node-1
+  network en1@-.-> node-2 & node-3
+  node-1 en2@-.-> network
+  %% sequencer-1 & sequencer-2 --- sequencer-1 & sequencer-2
+  %% sequencer-1 e99@--> mcast
+  %% sequencer-2 ~~~ disk-1
+  %% sequencer-3 ~~~ disk-1
+  %% e99@{ animate: true }
 ```
 
 </div>
@@ -413,7 +419,7 @@ routeAlias: fault-tolerance
 
 # Fault tolerance
 
-And the uglier truths
+And other ugly truths
 
 <!--
 
