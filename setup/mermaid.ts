@@ -25,6 +25,8 @@ const ink = '#e5e7eb' // edges, node borders, text (bright neutral)
 const dim = '#6b7280'
 const net = '#fb923c' // orange-400 — network node + replication (distinct from green/blue)
 const netFill = '#fb923c1f'
+const down = '#f87171' // red-400 — failed/offline node or edge
+const downFill = '#f871711f'
 
 // Exported so AnimatedMermaid can initialize the singleton itself. Slidev only
 // applies this config when *it* renders a mermaid block, which may not have
@@ -49,12 +51,15 @@ export const mermaidConfig = {
     .edge-pattern-dotted { stroke-width: 2px; }
     [id*="box"] > rect, [id*="box"] > .basic { stroke: ${special}; stroke-width: 2px; }
     .disk .nodeLabel { display: inline-block; min-width: 40px; }
-    .primary .nodeLabel { font-weight: bold; }
     .core rect, .core .basic, .core path, .core polygon,
     .primary rect, .primary .basic, .primary path, .primary polygon { stroke: ${special}; fill: ${specialFill}; }
     .client rect, .client .basic, .client path, .client polygon { stroke: ${client.base}; fill: ${client.fill}; }
     .net rect, .net .basic, .net path, .net polygon { stroke: ${net}; fill: ${netFill}; }
+    .down rect, .down .basic, .down path, .down polygon { stroke: ${down}; fill: ${downFill}; }
     .inactive { opacity: 0.3; }
+    /* Slidev's .slidev-layout p sets line-height:1.5rem (a fixed px); it throws
+       off label measurement/centering. Inherit the label's own line-height. */
+    .nodeLabel p { line-height: inherit; }
   `,
   themeVariables: {
     darkMode: true,

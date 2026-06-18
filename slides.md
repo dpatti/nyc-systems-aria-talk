@@ -112,9 +112,9 @@ routeAlias: what-is-a-distributed-log
 <!--
 
 - it's the multiplayer version of logs
-- everyone sees all records in the same order
+- everyone sees all records in the same order: called total ordering
 - Kafka is example, Databases also love these (e.g., replication log)
-- option: write events for downstream readers
+- use-case: write events for downstream consumers
 
 -->
 
@@ -138,7 +138,7 @@ and historically allergic to databases
 
 ---
 routeAlias: mental-model
-clicks: 10
+clicks: 11
 ---
 
 # A mental model for building on a distributed log
@@ -359,83 +359,81 @@ hop).
 
 ---
 routeAlias: architecting-for-durability
+clicks: 1
 ---
 
 # Architecting for durability
 
 Putting bounds on data loss
 
-<div class="flex justify-center">
-
-```mermaid {scale: 0.8}
+<script setup>
+const durabilityBase = `
 graph LR
-    classDef inactive-edge opacity:0.2
-    producers:::client@{ shape: st-rect, label: "clients" }
-    consumers-1:::client@{ shape: st-rect, label: "clients" }
-    consumers-2:::client@{ shape: st-rect, label: "clients" }
-    network
-    subgraph aria [" "]
-      subgraph node-1 [" "]
-        injectors-1:::core@{ shape: st-rect, label: "injectors" }
-        sequencer-1:::primary@{ shape: rect, label: "sequencer-1" }
-        publishers-1:::inactive@{ shape: st-rect, label: "publishers" }
-        disk-1:::disk@{ shape: cyl, label: " " }
-        class disk-1 core
-        injectors-1 e2@--> sequencer-1
-        sequencer-1 e3@--> disk-1
-        disk-1 e4@-.-> publishers-1
-        class e4 inactive-edge
-      end
-      subgraph node-2 [" "]
-        injectors-2:::inactive@{ shape: st-rect, label: "injectors" }
-        sequencer-2:::inactive@{ shape: rect, label: "sequencer-2" }
-        publishers-2:::core@{ shape: st-rect, label: "publishers" }
-        disk-2:::disk@{ shape: cyl, label: " " }
-        class disk-2 core
-        injectors-2 e8@-.-> sequencer-2
-        sequencer-2 e9@-.-> disk-2
-        disk-2 e10@--> publishers-2
-        class e8,e9 inactive-edge
-      end
-      subgraph node-3 [" "]
-        injectors-3:::inactive@{ shape: st-rect, label: "injectors" }
-        sequencer-3:::inactive@{ shape: rect, label: "sequencer-3" }
-        publishers-3:::core@{ shape: st-rect, label: "publishers" }
-        disk-3:::disk@{ shape: cyl, label: " " }
-        class disk-3 core
-        injectors-3 e11@-.-> sequencer-3
-        sequencer-3 e12@-.-> disk-3
-        disk-3 e13@--> publishers-3
-        class e11,e12 inactive-edge
-      end
+  classDef inactive-edge opacity:0.2
+  producers:::client@{ shape: st-rect, label: "clients" }
+  consumers-1:::client@{ shape: st-rect, label: "clients" }
+  consumers-2:::client@{ shape: st-rect, label: "clients" }
+  subgraph aria [" "]
+    subgraph node-1 [" "]
+      injectors-1:::core@{ shape: st-rect, label: "injectors" }
+      sequencer-1:::primary@{ shape: rect, label: "sequencer-1" }
+      publishers-1:::inactive@{ shape: st-rect, label: "publishers" }
+      disk-1:::disk@{ shape: cyl, label: " " }
+      class disk-1 core
+      injectors-1 e2@--> sequencer-1
+      sequencer-1 e3@--> disk-1
+      disk-1 e4@-.-> publishers-1
+      class e4 inactive-edge
     end
-    %% aria is only a layout container; hide its panel
-    style aria fill:none,stroke:none
-    %% mcast@{ label: " " }
-    %% mcast ~~~ node-1 & node-2 & node-3
-    %% mcast --> disk-2
-    %% mcast --> disk-3
-    %% node-1 & node-2 & node-3 -.- anchor
-    %% node-3 --> node-2
-    %% node-2 --> node-1
+    subgraph node-2 [" "]
+      injectors-2:::inactive@{ shape: st-rect, label: "injectors" }
+      sequencer-2:::inactive@{ shape: rect, label: "sequencer-2" }
+      publishers-2:::core@{ shape: st-rect, label: "publishers" }
+      disk-2:::disk@{ shape: cyl, label: " " }
+      class disk-2 net
+      injectors-2 e8@-.-> sequencer-2
+      sequencer-2 e9@-.-> disk-2
+      disk-2 e10@--> publishers-2
+      class e8,e9 inactive-edge
+    end
+    subgraph node-3 [" "]
+      injectors-3:::inactive@{ shape: st-rect, label: "injectors" }
+      sequencer-3:::inactive@{ shape: rect, label: "sequencer-3" }
+      publishers-3:::core@{ shape: st-rect, label: "publishers" }
+      disk-3:::disk@{ shape: cyl, label: " " }
+      class disk-3 net
+      injectors-3 e11@-.-> sequencer-3
+      sequencer-3 e12@-.-> disk-3
+      disk-3 e13@--> publishers-3
+      class e11,e12 inactive-edge
+    end
+  end
+  style aria fill:none,stroke:none
   producers e1@--> injectors-1
   publishers-1 ~~~ producers
-  publishers-2 --> producers & consumers-1
+  publishers-2 e14@--> producers
+  publishers-2 --> consumers-1
   publishers-3 --> consumers-2
   network:::net@{ shape: hex, label: "network" }
-  network en2@-.-> node-2
-  network en3@-.-> node-3
-  node-1 en1@-.-> network
+  network en1@-.- node-1
+  network en2@-.- node-2
+  network en3@-.- node-3
   classDef net-edge stroke:#fb923c,stroke-width:2px
   class en1,en2,en3 net-edge
-  %% sequencer-1 & sequencer-2 --- sequencer-1 & sequencer-2
-  %% sequencer-1 e99@--> mcast
-  %% sequencer-2 ~~~ disk-1
-  %% sequencer-3 ~~~ disk-1
-  %% e99@{ animate: true }
-```
+`
 
-</div>
+// Click 1 animates the producer's write -> replicate -> read path, and bolds
+// all the network links to highlight how data is distributed.
+const durabilityFlow = ['e1', 'e2', 'e3', 'e10', 'e14']
+  .map((e) => `  ${e}@{ animate: true }`)
+  .join('\n')
+const durabilityFrames = [
+  durabilityBase,
+  `${durabilityBase}\n${durabilityFlow}\n  classDef net-bold stroke:#fb923c,stroke-width:5px\n  class en1,en2,en3 net-bold`,
+]
+</script>
+
+<AnimatedMermaid :frames="durabilityFrames" class="transform scale-75 origin-top" />
 
 <!--
 
@@ -451,8 +449,42 @@ graph LR
 -->
 
 ---
-routeAlias: fault-tolerance
+routeAlias: losing-writes
 clicks: 3
+---
+
+# Promoting a node that's behind
+
+The serving node is the most ahead — promote one that's behind and new appends land at offsets that already mean something else
+
+<DataLoss class="mt-8" />
+
+<!--
+- rule of 2: the node serving clients (publishers on B) is the furthest ahead
+- 4 & 5 aren't lost — clients saw them and B still has them
+- but promote C (behind) and its new appends collide with B's offsets → divergence
+-->
+
+---
+routeAlias: split-brain
+clicks: 4
+---
+
+# Two sequencers, corrupted log
+
+Promote a second sequencer while the first is only *presumed* dead — when it comes back, both have stamped different records at the same offsets
+
+<SplitBrain class="mt-8" />
+
+<!--
+- this is why the sequencer is the one thing we don't make redundant
+- two active sequencers = two truths for the same offset = corruption
+- we revisit this in the failover sequence next
+-->
+
+---
+routeAlias: fault-tolerance
+clicks: 4
 ---
 
 # Fault tolerance
@@ -526,6 +558,7 @@ routeAlias: rocksdb
 
 ---
 routeAlias: eventual-consistency
+clicks: 2
 ---
 
 # Global eventual consistency
@@ -533,6 +566,8 @@ routeAlias: eventual-consistency
 - Write to the log in your region for fast, persistent updates
 - Your region's log is relayed to a global log
 - Your region's view is the global log plus the unrelayed region tail
+
+<EventualConsistency class="mt-8" />
 
 ---
 routeAlias: blackbox
@@ -568,5 +603,52 @@ routeAlias: end
 
 - When your tail latency is predictable, you can design around it
 - No optimistic updates, no local caching
+
+diagrams
+- split brain
+- promoting the wrong sequencer / rule of 2 violation
+
+- storage is left a little too abstract; "what does it mean to have a cylinder"
+    - tie in "every node has all data"
+
+- this is not big big data scale
+
+- snapshotting
+    - could do it earlier
+
+- speed / scale / reliability numbers
+
+- first mention of Aria
+
+- mental model: number/label
+
+- fault tolerance: "single point of failure" is not super clear
+    - move client arrow
+    - promote sequencer -> deactivate publishers
+
+- git rebase analogy
+
+- state machine wants to append a message: confusing?
+    - wrap in application
+
+- "trading colos" -> low latency local datacenter
+
+- fold -> iterate
+
+- "distributed log" -> distributed in the sense of participation, not storage
+
+- global eventual consistency -> interesting enough?
+
+- "why not kafka?" -> when talking about the sharding
+- "why not database?" -> say more than cultural; cultural feels very
+  unsatisfying
+
+- nix paradox slide
+
+- "adding more batching" -> maybe nix
+
+- fix vertical alignment of text in nodes
+
+- maybe animate network line
 
 -->

@@ -81,7 +81,9 @@ async function render() {
   const { svg } = await mermaid.render(`mermaid-${uid}-${n++}`, code, host)
   if (el.value) {
     el.value.innerHTML = svg
-    dimOthers(el.value)
+    // In frames mode the frame styles everything explicitly; dimming would
+    // override colors we set on purpose (e.g. emphasized network lines).
+    if (!props.frames) dimOthers(el.value)
   }
 }
 
