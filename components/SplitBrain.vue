@@ -1,10 +1,10 @@
 <script setup lang="ts">
 // Why two sequencers corrupt the log — told as a failover gone wrong. Steps:
-//   0 seq A active, seq B replica, shared prefix [1 2 3]
-//   1 seq A goes offline
-//   2 seq B is promoted (now active)
-//   3 seq B stamps a new message at offset 4
-//   4 seq A comes back from the dead — but it had stamped 3 of its own messages
+//   0 node A active, node B replica, shared prefix [1 2 3]
+//   1 node A goes offline
+//   2 node B is promoted (now active)
+//   3 node B stamps a new message at offset 4
+//   4 node A comes back from the dead — but it had stamped 3 of its own messages
 //     (4,5,6, all different) that disagree with B's. Colors mark them distinct.
 import { computed } from 'vue'
 import { useSlideContext } from '@slidev/client'
@@ -13,10 +13,10 @@ const { $clicks } = useSlideContext()
 const c = computed(() => $clicks.value ?? 0)
 
 const stride = 64
-const OX = 110
-const rowA = 30
-const rowB = 110
-const W = 540
+const OX = 150 // room for the "node X (active)" label before the log starts
+const rowA = 20
+const rowB = 104
+const W = 580
 const H = 220
 
 const aOffline = computed(() => c.value >= 1 && c.value <= 3)
@@ -56,9 +56,9 @@ function labelClass(id: string) {
   return 'text-gray-300'
 }
 function labelText(id: string) {
-  if (activeId.value === id) return `seq ${id} (active)`
-  if (id === 'A' && aBack.value) return 'seq A (back!)'
-  return `seq ${id}`
+  if (activeId.value === id) return `node ${id} (active)`
+  if (id === 'A' && aBack.value) return 'node A (back!)'
+  return `node ${id}`
 }
 </script>
 

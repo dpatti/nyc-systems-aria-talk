@@ -5,7 +5,6 @@
 //   1 node-2 goes offline
 //   2 node-2 recovers, node-1 (the active!) goes offline
 //   3 node-3 is promoted to active
-//   4 reset, but node-1 and node-3 are both active at once (split brain)
 // Connections fail over to a healthy node; the old path stays as a dim line.
 type Role = 'active' | 'replica' | 'promoted'
 type Spec = { role: Role; offline?: boolean }
@@ -44,7 +43,7 @@ function faultNode(n: number, role: Role, offline?: boolean) {
   const lines = [
     `    subgraph node-${n} [" "]`,
     `      injectors-${n}:::${inj}@{ shape: st-rect, label: "injectors" }`,
-    `      sequencer-${n}:::${seq}@{ shape: rect, label: "sequencer-${n}" }`,
+    `      sequencer-${n}:::${seq}@{ shape: rect, label: "sequencer ${'ABC'[n - 1]}" }`,
     `      publishers-${n}:::${pub}@{ shape: st-rect, label: "publishers" }`,
     `      disk-${n}:::disk@{ shape: cyl, label: " " }`,
     `      class disk-${n} ${dsk}`,
@@ -132,14 +131,12 @@ function faultGraph(spec: Record<number, Spec>) {
   ].join('\n')
 }
 
-// Needs `clicks: 4` on the slide (one fewer than the number of frames).
+// Needs `clicks: 3` on the slide (one fewer than the number of frames).
 const faultFrames = [
   faultGraph({ 1: { role: 'active' }, 2: { role: 'replica' }, 3: { role: 'replica' } }),
   faultGraph({ 1: { role: 'active' }, 2: { role: 'replica', offline: true }, 3: { role: 'replica' } }),
   faultGraph({ 1: { role: 'active', offline: true }, 2: { role: 'replica' }, 3: { role: 'replica' } }),
   faultGraph({ 1: { role: 'active', offline: true }, 2: { role: 'replica' }, 3: { role: 'promoted' } }),
-  // Reset, but oops — node-1 and node-3 are both active at once (split brain).
-  faultGraph({ 1: { role: 'active' }, 2: { role: 'replica' }, 3: { role: 'promoted' } }),
 ]
 </script>
 

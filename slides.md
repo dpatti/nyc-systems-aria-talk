@@ -24,6 +24,11 @@ transition: slide-left
 comark: true
 duration: 25min
 routeAlias: title
+fonts:
+  provider: google
+  # loaded only to give the shruggie's katakana (ツ) a glyph; apply with
+  # style="font-family: 'Noto Sans JP'". Doesn't change the deck's sans/mono.
+  serif: Noto Sans JP
 ---
 
 # Building a fast log
@@ -32,14 +37,17 @@ with a smidge of fault-tolerance
 
 <!--
 
-What do I mean by "fast", and more importantly "smidge" here?
+START THE TIMER MY DUDE
 
-By fast I mean double-digit microsecond append times with 10G throughput, and by
-smidge I mean there are some situations we will never automatically recover from
-without a human.
+Thanks everyone for coming out. I'm here to talk about adventures in building a
+fast distributed log as a platform with a smidge of fault-tolerance.
 
-Hoping you take away some appreciation for the tradeoffs I'll discuss, even if
-they're a bit unfashionable.
+I'm going to talk about the parts that I find neat and the somewhat
+unfashionable trade-offs that went into making them. To set the scene a bit by
+"fast" I mean microsecond scale latencies and by "smidge" I mean there are some
+conditions where everything grinds to a halt until a human intervenes.
+
+DID YOU START THE TIMER?
 
 -->
 
@@ -50,6 +58,17 @@ routeAlias: hi
 # Hi
 
 I'm Doug
+
+<v-click>
+
+<div class="text-center">
+
+![](./podcast.png){class="inline-block h-80 mr-8 mt-8 shadow"}
+![](./blog.png){class="inline-block h-80 mt-8 shadow"}
+
+</div>
+
+</v-click>
 
 <!--
 
@@ -98,8 +117,8 @@ routeAlias: what-is-a-log
 
 - append-only data file
 - that's basically the definition
+- the only mutation is append
 - example: database WAL
-- logs are great for feeding into state machines
 
 -->
 
@@ -169,6 +188,8 @@ clicks: 11
 - [click] And occasionally, you snapshot and continue to start up from there
   next time.
 
+- It's not request/response; it's append/observe
+
 -->
 
 ---
@@ -197,15 +218,8 @@ but it has limitations
 - [click] If there is exactly one order, that order must be determined by one
   thing
 - (At least, I think)
-- ?
-    - Sharding gives you independent ordering
-    - Trying to reconstruct imposes latency costs
-
-- The utility goes down the more you have to compromise
-- [ ] Total ordering means one process: a sequencer
-- [ ] "maximize total ordering"
-- If everyone is thinking about the same log as the source of truth, we want to
-  make it big
+- Sharding would cause you to lose total ordering
+- Kafka does this
 
 -->
 
@@ -215,12 +229,12 @@ routeAlias: aria-goal
 
 # We made Aria to be a platform teams could build on
 
-How far can we push fast, low-latency total ordering within one shard?
+How far can we push a log that is fast, low-latency, and has total ordering?
 
 <v-clicks>
 
 - Speed (~30us round-trip)
-- Scale (up to 10Gbps write per Aria instance, plenty of fanout)
+- Scale (up to 10Gbps of writes per Aria instance)
 - Reliability (historically good uptime, predictable performance, data retention)
 
 </v-clicks>
@@ -239,6 +253,7 @@ This isn't like, the backbone of Jane Street or something
   throughput
 - [click] There's not just "one" Aria: each region has at least one, some
   users get their own, some for cloud environments, etc.
+- Also this is not nearly big data scale
 - [click] Reliability: no number here, but more than just "uptime"
 - [click] I don't want to give you the wrong impression. Lots of systems at JS,
   different requirements, etc.
@@ -250,13 +265,13 @@ layout: center
 routeAlias: architecture
 ---
 
-# A brief snapshot of Aria
+# A peek into Aria
 
 <!-- It has evolved a lot! And it will keep evolving -->
 
 ---
 routeAlias: speed
-clicks: 5
+clicks: 3
 ---
 
 # Designing for speed
@@ -286,63 +301,21 @@ graph LR
 `
 </script>
 
-<AnimatedMermaid :code="cheapAppends" :steps="[['e1'], ['e2'], ['e3', 'e4'], ['e5', 'e6', 'e7'], ['e1', 'e2', 'e3', 'e4', 'e5']]" />
-
-<div class="text-center mt-6 text-xl op80">
-<v-switch>
-<template #0>
-
-TODO: intro — the shape of a single Aria cluster
-
-</template>
-<template #1>
-
-TODO: step 1 — clients send appends to the injectors
-
-</template>
-<template #2>
-
-TODO: step 2 — injectors hand off to the sequencer
-
-</template>
-<template #3>
-
-TODO: step 3 — sequencer stamps and persists to disk
-
-</template>
-<template #4>
-
-TODO: step 4 — publishers fan out to clients
-
-</template>
-<template #5>
-
-TODO: step 5 — the full append loop
-
-</template>
-</v-switch>
-</div>
+<AnimatedMermaid :code="cheapAppends" :steps="[['e1'], ['e2', 'e3'], ['e4', 'e5', 'e6', 'e7']]" />
 
 <!--
 
-- sequencer simple; push complication out
-- scaling through ingress (injectors) and egress (publishers)
-- [ ] "stamp with a timestamp" -> ??
-- (?) server coordination (control plane?) on the log too
-
-- [ ] fill out click footers above?
-- [ ] use click notes below
-
-[click:2] 2
-
-[click] 3
-
-- [ ] talk about bare metal, userspace networking, specialized nics
-
-
-I can't tell if latency should be its own section after this, or just talked
-about between these two, or after the next one (since it introduces the extra
-hop).
+- single node aria
+- focus on the sequencer: single point of ordering
+- let's trace
+- [click] client wants to append, sends to injectors - authz, rate limiting,
+  chunking, etc
+- [click] here's where we get our ordering. read record in, stamp, push record out
+- strictly increaseing timestamp
+- persistence here is a combination of an in-memory ring buffer and disk writes;
+  we don't fsync on every append, and we'll come back to that
+- [click] publishers filter the log and deliver to clients
+- we can scale those out more easily
 
 -->
 
@@ -365,7 +338,7 @@ graph LR
   subgraph aria [" "]
     subgraph node-1 [" "]
       injectors-1:::core@{ shape: st-rect, label: "injectors" }
-      sequencer-1:::primary@{ shape: rect, label: "sequencer-1" }
+      sequencer-1:::primary@{ shape: rect, label: "sequencer A" }
       publishers-1:::inactive@{ shape: st-rect, label: "publishers" }
       disk-1:::disk@{ shape: cyl, label: " " }
       class disk-1 core
@@ -376,7 +349,7 @@ graph LR
     end
     subgraph node-2 [" "]
       injectors-2:::inactive@{ shape: st-rect, label: "injectors" }
-      sequencer-2:::inactive@{ shape: rect, label: "sequencer-2" }
+      sequencer-2:::inactive@{ shape: rect, label: "sequencer B" }
       publishers-2:::core@{ shape: st-rect, label: "publishers" }
       disk-2:::disk@{ shape: cyl, label: " " }
       class disk-2 core
@@ -387,7 +360,7 @@ graph LR
     end
     subgraph node-3 [" "]
       injectors-3:::inactive@{ shape: st-rect, label: "injectors" }
-      sequencer-3:::inactive@{ shape: rect, label: "sequencer-3" }
+      sequencer-3:::inactive@{ shape: rect, label: "sequencer C" }
       publishers-3:::core@{ shape: st-rect, label: "publishers" }
       disk-3:::disk@{ shape: cyl, label: " " }
       class disk-3 core
@@ -426,55 +399,23 @@ const durabilityFrames = [
 
 <!--
 
-- [ ] needs clicks
-- [ ] herd / multicast to keep strain off sequencer/network
-- rule of 2
-- latency: disk writes out of hot loop, ring buffer + backpressure gossip
-- non-scaling because single log is processed by each node (not inherent)
-- multicast + bare metal + low-latency nic + native user space networking
-- multicast is optimization, still have cloud presence
-- [ ] latency here?
-- [ ] rule of 2 leads to recovery
-
--->
-
----
-routeAlias: losing-writes
-clicks: 3
----
-
-# Promoting the wrong sequencer
-
-The serving node is the most ahead — promote one that's behind and new appends land at offsets that already mean something else
-
-<DataLoss class="mt-8" />
-
-<!--
-- rule of 2: the node serving clients (publishers on B) is the furthest ahead
-- 4 & 5 aren't lost — clients saw them and B still has them
-- but promote C (behind) and its new appends collide with B's offsets → divergence
--->
-
----
-routeAlias: split-brain
-clicks: 4
----
-
-# Promoting two sequencers
-
-Promote a second sequencer while the first is only *presumed* dead — when it comes back, both have stamped different records at the same offsets
-
-<SplitBrain class="mt-8" />
-
-<!--
-- this is why the sequencer is the one thing we don't make redundant
-- two active sequencers = two truths for the same offset = corruption
-- we revisit this in the failover sequence next
+- this diagram is 3 aria nodes connected by a network
+- notice seq B and C are disabled
+- also notice publishers on the first node are too
+- [click] here's the path from that same one client again
+- still has two connections, but the data makes it to two nodes
+- this gives us the guarantee that any single node loss will not lose data we've
+  delivered to a client
+- this is also why we don't block on fsync: our durability model revolves around
+  two nodes having the data
+- this whole scheme is still fast because we do internal replication with a UDP
+  multicast protocol, bare metal servers, our own managed datacenters,
+  low-latency nics, userspace networking
 -->
 
 ---
 routeAlias: fault-tolerance
-clicks: 4
+clicks: 3
 ---
 
 # Fault tolerance
@@ -486,20 +427,57 @@ And other ugly truths
 <!--
 
 - redundancy everywhere except sequencer
-- consensus algorithms are easy to get wrong
+- [click] if we lose this node, clients can choose a different publisher
+- [click] if we lose THIS node though...
+- the system grinds to a halt
+- we don't do automatic election or promotion of another sequencer
+- why?? consensus algorithms are easy to get wrong
 - hardware is more reliable than you think
-- in practice, actual downtime is very low
+- but in practice, actual downtime is very low - 5m for americas instance
 - but also: we're actively working on this
 
-- [ ] failure mode for >1 node loss
-    - no quorum
-    - datacenter loss
-    - "press the button" is a bit reductive
-        - "built the thing ourselves" tie-in
-    - JS uptime requirements are different
-    - good correlation between developer availability and uptime value
-    - choose your own redundancy
-- [ ] actual downtime numbers
+### It's nuanced!
+
+- we've built the system, and we've built the tooling and know-how to react in
+  many different scenarios
+
+-->
+
+---
+routeAlias: losing-writes
+clicks: 3
+---
+
+# Promoting the wrong sequencer
+
+Promoting a server that does not have the most recent message will fork the
+stream.
+
+<DataLoss class="mt-8" />
+
+<!--
+
+- rule of 2: the node serving clients (publishers on B) is the furthest ahead
+- 4 & 5 aren't lost: clients saw them and B still has them
+- but promote C (behind) and its new appends collide with B's offsets
+
+-->
+
+---
+routeAlias: split-brain
+clicks: 5
+---
+
+# Promoting two sequencers
+
+Promoting a sequencer does not prevent another sequencer from acting, especially
+in a network partition.
+
+<SplitBrain class="mt-8" />
+
+<!--
+
+- two active sequencers = two truths for the same offset = corruption
 
 -->
 
@@ -508,13 +486,34 @@ layout: section
 routeAlias: usage
 ---
 
-# All this for state machine replication
+# Do we have regrets?
+<span style="font-family: 'Noto Sans JP'">¯\\\_(ツ)_/¯</span>
 
 <!--
-- We wanted to make it really easy to use; primitives are pub/sub; component
-  architecture for composition
-- It is very flexible, if you know what you're doing
+
+- Certainly some, but the redundancy story has worked out so far
+- It's a looming threat for sure
+
+- We made something really easy to use, and people like that
+- We also made it capable of providing expert level control
 - But people did some very cool things with it
+
+-->
+
+---
+layout: section
+routeAlias: end
+---
+
+# it's over?
+
+<!--
+
+Not really, I was going to talk about more things but it got long
+
+But in all, total ordering is great and powerful especially when you can afford
+it
+
 -->
 
 ---
@@ -541,25 +540,6 @@ clicks: 2
 <EventualConsistency class="mt-8" />
 
 ---
-routeAlias: history
----
-
-# The log as a history
-
-- Time-travel interactive debugger -- with breakpoints
-- Replay into the same state machine for bug or performance analysis
-- Build one-off tools that use the log as a query
-
-<!-- Might cut this -->
-
----
-layout: section
-routeAlias: end
----
-
-# it's over?
-
----
 layout: section
 routeAlias: endend
 ---
@@ -567,66 +547,3 @@ routeAlias: endend
 # ok now it's over
 
 <https://dpatti.com>
-
-<!--
-
-# These are miscellaneous notes that don't have a home
-
-## Consensus from a single log
-
-- like type systems eliminate a large class of bugs, same with building on aria
-- still need to reason through race conditions at send time, but not receive time
-
-## Latency and simple app design
-
-- When your tail latency is predictable, you can design around it
-- No optimistic updates, no local caching
-
-diagrams
-- split brain
-- promoting the wrong sequencer / rule of 2 violation
-
-- storage is left a little too abstract; "what does it mean to have a cylinder"
-    - tie in "every node has all data"
-
-- this is not big big data scale
-
-- snapshotting
-    - could do it earlier
-
-- speed / scale / reliability numbers
-
-- first mention of Aria
-
-- mental model: number/label
-
-- fault tolerance: "single point of failure" is not super clear
-    - move client arrow
-    - promote sequencer -> deactivate publishers
-
-- git rebase analogy
-
-- state machine wants to append a message: confusing?
-    - wrap in application
-
-- "trading colos" -> low latency local datacenter
-
-- fold -> iterate
-
-- "distributed log" -> distributed in the sense of participation, not storage
-
-- global eventual consistency -> interesting enough?
-
-- "why not kafka?" -> when talking about the sharding
-- "why not database?" -> say more than cultural; cultural feels very
-  unsatisfying
-
-- nix paradox slide
-
-- "adding more batching" -> maybe nix
-
-- fix vertical alignment of text in nodes
-
-- maybe animate network line
-
--->

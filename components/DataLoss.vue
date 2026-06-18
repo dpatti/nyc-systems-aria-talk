@@ -15,8 +15,8 @@ const { $clicks } = useSlideContext()
 const c = computed(() => $clicks.value ?? 0)
 
 const stride = 64
-const OX = 120
-const W = 700
+const OX = 150 // room for the "node X (active)" label before the log starts
+const W = 760
 const H = 270
 
 const aDead = computed(() => c.value >= 1)
@@ -60,7 +60,7 @@ function labelClass(id: string) {
   <div class="relative mx-auto mt-6 font-mono" :style="{ width: `${W}px`, height: `${H}px` }">
     <!-- node labels -->
     <div v-for="(top, id) in rows" :key="id" class="absolute text-sm transition-all duration-500" :class="labelClass(id)" :style="{ left: '0px', top: `${top + 16}px` }">
-      {{ id }}{{ activeId === id ? ' (active)' : '' }}
+      node {{ id }}{{ activeId === id ? ' (active)' : '' }}
     </div>
 
     <!-- A: 1-5, dims when it dies -->
@@ -100,7 +100,7 @@ function labelClass(id: string) {
       v-for="o in [1, 2, 3]"
       :key="`c${o}`"
       class="absolute w-14 h-14 flex items-center justify-center border-2 rounded transition-all duration-500"
-      :class="promotedC ? teal : gray"
+      :class="gray"
       :style="{ left: `${OX + (o - 1) * stride}px`, top: `${rows.C}px` }"
     >
       {{ o }}
