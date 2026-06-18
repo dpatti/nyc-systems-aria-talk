@@ -37,13 +37,15 @@ const localCells = computed(() => {
   let pending = 0
   return localRecords.map((id) => {
     const gi = g.indexOf(id)
-    return gi >= 0 ? { id, pos: gi } : { id, pos: g.length + pending++ }
+    return gi >= 0 ? { id, pos: gi, relayed: true } : { id, pos: g.length + pending++, relayed: false }
   })
 })
 
 const isLocal = (id: string) => id.startsWith('L')
 const gray = 'border-gray-400 bg-gray-700/40 text-gray-200'
 const teal = 'border-teal-400 bg-teal-400/15 text-teal-200'
+// a local record already copied up to global: de-emphasized in the local row
+const grayFaded = 'border-gray-600 bg-gray-800/30 text-gray-400 opacity-50'
 const subs: Record<string, string> = { '1': '₁', '2': '₂', '3': '₃' }
 const label = (id: string) => (isLocal(id) ? `L${subs[id[1]]}` : id)
 </script>
@@ -69,7 +71,7 @@ const label = (id: string) => (isLocal(id) ? `L${subs[id[1]]}` : id)
       v-for="cell in localCells"
       :key="`l-${cell.id}`"
       class="absolute w-14 h-14 flex items-center justify-center border-2 rounded transition-all duration-500"
-      :class="teal"
+      :class="cell.relayed ? grayFaded : teal"
       :style="{ left: `${OX + cell.pos * stride}px`, top: `${botRow}px` }"
     >
       {{ label(cell.id) }}

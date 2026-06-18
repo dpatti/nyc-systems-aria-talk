@@ -57,6 +57,10 @@ export const mermaidConfig = {
     .net rect, .net .basic, .net path, .net polygon { stroke: ${net}; fill: ${netFill}; }
     .down rect, .down .basic, .down path, .down polygon { stroke: ${down}; fill: ${downFill}; }
     .inactive { opacity: 0.3; }
+    /* port-LED blink for emphasized edges. mermaid bakes classDef styles inline
+       on edges (a class selector won't match), so the animation is applied via a
+       classDef; only the keyframes live here. */
+    @keyframes net-blink { 0% { opacity: 1; } 50% { opacity: 0.50; } }
     /* Slidev's .slidev-layout p sets line-height:1.5rem (a fixed px); it throws
        off label measurement/centering. Inherit the label's own line-height. */
     .nodeLabel p { line-height: inherit; }

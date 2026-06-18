@@ -41,10 +41,6 @@ without a human.
 Hoping you take away some appreciation for the tradeoffs I'll discuss, even if
 they're a bit unfashionable.
 
-Slides are available online, link at the end
-
-- [ ] really get intro down
-
 -->
 
 ---
@@ -57,10 +53,12 @@ I'm Doug
 
 <!--
 
-- Jane Street
-- work on a distributed log called "Aria"
-- Signals and Threads
-- Blog post
+- work at Jane Street
+- on a distributed log called "Aria" for the past 6ish years
+- we've talked about Aria before
+- Signals and Threads (SMR)
+- Tech Blog (testing)
+- today: weird architecture
 
 -->
 
@@ -69,20 +67,22 @@ routeAlias: confession
 ---
 
 # A confession
-[](no-subtitle-hack)
+[](no-subtitle-hack) <!-- otherwise the images become a subtitle -->
 
 ![](./receipt.png){v-click="", class="inline-block h-80 mr-8 mt-8 shadow"}
 ![](./ddia.png){v-click="", class="inline-block h-80 mt-8 shadow"}
 
 <!--
 
-I don't have an academic background, never took a distributed systems course. I
-learned everything on the fly. Here's a picture of me buying a book.
-
-- 11 days after agreeing to this talk
-
-This doesn't really matter, but it's maybe useful framing, because my
-experiences are lived and anecdotal.
+- I'm not an expert in distributed systems
+- never even took a course
+- I learned a tiny part of the field on the fly at JS
+- one week after agreeing to give this talk, I bought a book
+- this book
+- I thought I could educate myself so that I didn't sound foolish
+- but I decided instead, I'm going to just share what I know with the best
+  context I can
+- if something sounds weird, it's probably me and not you
 
 -->
 
@@ -95,10 +95,12 @@ routeAlias: what-is-a-log
 <LogTape class="mt-16" />
 
 <!--
+
 - append-only data file
-- here we have records
-- state machines / determinism built on log data
-- Example: database WAL
+- that's basically the definition
+- example: database WAL
+- logs are great for feeding into state machines
+
 -->
 
 ---
@@ -112,9 +114,13 @@ routeAlias: what-is-a-distributed-log
 <!--
 
 - it's the multiplayer version of logs
-- everyone sees all records in the same order: called total ordering
-- Kafka is example, Databases also love these (e.g., replication log)
-- use-case: write events for downstream consumers
+- many actors distributed all over operating together
+- you can still only append
+- and everyone sees the same log: all records in the same order
+- this is called total ordering and it's the most important part of this talk
+- Kafka is an example of a popular distributed log
+- one common use-case: write events for downstream consumers
+- we're going to talk about something else
 
 -->
 
@@ -129,10 +135,10 @@ and historically allergic to databases
 
 <!--
 
-- Aria is not the first (or second or third) log abstraction we've built
-- We do USE dbs, but they're not the easy thing to reach for
+- Aria is not the first log abstraction we've built, nor is it the second or third
+- We *do* use dbs, but for a number of reasons, they haven't been the easy choice
 - (though this is changing)
-- The two are not incompatible!
+- [ ] something about dbs that is more satisfying
 
 -->
 
@@ -141,76 +147,59 @@ routeAlias: mental-model
 clicks: 11
 ---
 
-# A mental model for building on a distributed log
+# One mental model for building on a distributed log
 
 <MentalModel />
 
 <!--
 
-
-[click:5] you don't process your update; something might race
-
-[click:1] you also don't wait for an ack on the append
-
-[click:2] you have to deal with the race condition
-
-[click:2] you occasionally snapshot
+- We start with a log that contains lots of records from different components in
+  our service
+- [click] We build a state machine, but it doesn't want every message
+- [click] So we filter the log down to only the messages we want
+- [click] Then we iterate, modifying our state
+- [click] Now our application might want to do something, maybe due to some side
+  effect
+- [click] It sends a <star> message, but there's also another in flight.
+  Importantly, it does not incorporate this message into its own state
+- [click] The appends land in some order
+- [click] You also aren't waiting for an "ack", you just keep going
+- [click] You're forced to deal with the potential race condition
+- [click] When you see your message, you finally process it
+- [click] And occasionally, you snapshot and continue to start up from there
+  next time.
 
 -->
 
 ---
-layout: two-cols-header
-routeAlias: dreams-and-reality
+layout: center
+routeAlias: like-this-pattern
 ---
 
-# Dreams and reality
+# We like this pattern
 
-::left::
-
-<v-click>
-
-## Total ordering is great
-
-</v-click>
+but it has limitations
 
 <v-clicks>
 
-- Foundation for both simple and complex apps
-- Ability to recover after a crash
-- Pure state machines are very satisfying
-- Total ordering is *consensus*
+- Logs are flexible
+- Total ordering gives you *consensus*
+- But it is inherently a bottleneck
 
 </v-clicks>
-
-::right::
-
-<v-click>
-
-## It's also harder to scale
-
-</v-click>
-
-<v-clicks>
-
-- Shard the log?
-- Operate on bigger batches?
-
-</v-clicks>
-
-<style>
-.two-cols-header {
-  column-gap: 3rem;
-}
-</style>
 
 <!--
 
-Talk about single sequencer?
-
-- [click] All race conditions are settled with the log. e.g., two people buying
-  tickets for a concert - who wins? whoever came first on the log. and
-  importantly, all nodes in the system can agree on that.
-
+- [click] You decide the data and how it is interpreted
+- [click] Total ordering is *consensus*
+    - All race conditions are settled on the log
+    - All consumers can agree on the outcome without further communication
+- [click] If there is exactly one order, that order must be determined by one
+  thing
+- (At least, I think)
+- ?
+    - Sharding gives you independent ordering
+    - Trying to reconstruct imposes latency costs
 
 - The utility goes down the more you have to compromise
 - [ ] Total ordering means one process: a sequencer
@@ -224,26 +213,17 @@ Talk about single sequencer?
 routeAlias: aria-goal
 ---
 
-# We made Aria to be generally useful
-
-<!-- - [ ] "Generally" meaning "general to the firm"
-     - [ ] Also "generally useful" is weak
--->
+# We made Aria to be a platform teams could build on
 
 How far can we push fast, low-latency total ordering within one shard?
 
-- Speed
-- Scale
-- Reliability
+<v-clicks>
 
-<v-click>
+- Speed (~30us round-trip)
+- Scale (up to 10Gbps write per Aria instance, plenty of fanout)
+- Reliability (historically good uptime, predictable performance, data retention)
 
-|                | Theoretical             | Practical                          |
-| -------------- | ----------------------- | ---------------------------------- |
-| **Latency**    | 30us round-trip         | depends on distance to the cluster |
-| **Throughput** | 10Gbps / ~20M appends/s | depends on fanout needs            |
-
-</v-click>
+</v-clicks>
 
 <v-click>
 
@@ -255,22 +235,31 @@ This isn't like, the backbone of Jane Street or something
 
 <!--
 
-We still do shard. There's not just "one" Aria: each region has at least one,
-some special use-cases get one, some in trading datacenters, some in the cloud
-
-Reliable: availability, latency (tails), durability
-
-latency: kind of low because it's JS
-
+- [click] This does matter to us more. But sometimes latency is bottleneck on
+  throughput
+- [click] There's not just "one" Aria: each region has at least one, some
+  users get their own, some for cloud environments, etc.
+- [click] Reliability: no number here, but more than just "uptime"
+- [click] I don't want to give you the wrong impression. Lots of systems at JS,
+  different requirements, etc.
 
 -->
 
 ---
-routeAlias: architecting-for-speed
+layout: center
+routeAlias: architecture
+---
+
+# A brief snapshot of Aria
+
+<!-- It has evolved a lot! And it will keep evolving -->
+
+---
+routeAlias: speed
 clicks: 5
 ---
 
-# Architecting for speed
+# Designing for speed
 
 You need a sequencer, so keep it simple
 
@@ -358,11 +347,11 @@ hop).
 -->
 
 ---
-routeAlias: architecting-for-durability
+routeAlias: durability
 clicks: 1
 ---
 
-# Architecting for durability
+# Designing for durability
 
 Putting bounds on data loss
 
@@ -390,7 +379,7 @@ graph LR
       sequencer-2:::inactive@{ shape: rect, label: "sequencer-2" }
       publishers-2:::core@{ shape: st-rect, label: "publishers" }
       disk-2:::disk@{ shape: cyl, label: " " }
-      class disk-2 net
+      class disk-2 core
       injectors-2 e8@-.-> sequencer-2
       sequencer-2 e9@-.-> disk-2
       disk-2 e10@--> publishers-2
@@ -401,7 +390,7 @@ graph LR
       sequencer-3:::inactive@{ shape: rect, label: "sequencer-3" }
       publishers-3:::core@{ shape: st-rect, label: "publishers" }
       disk-3:::disk@{ shape: cyl, label: " " }
-      class disk-3 net
+      class disk-3 core
       injectors-3 e11@-.-> sequencer-3
       sequencer-3 e12@-.-> disk-3
       disk-3 e13@--> publishers-3
@@ -429,7 +418,7 @@ const durabilityFlow = ['e1', 'e2', 'e3', 'e10', 'e14']
   .join('\n')
 const durabilityFrames = [
   durabilityBase,
-  `${durabilityBase}\n${durabilityFlow}\n  classDef net-bold stroke:#fb923c,stroke-width:5px\n  class en1,en2,en3 net-bold`,
+  `${durabilityBase}\n${durabilityFlow}\n  classDef net-blink stroke:#fb923c,stroke-width:2px,animation: net-blink 1.2s step-end infinite\n  class en1,en2,en3 net-blink`,
 ]
 </script>
 
@@ -445,6 +434,7 @@ const durabilityFrames = [
 - multicast + bare metal + low-latency nic + native user space networking
 - multicast is optimization, still have cloud presence
 - [ ] latency here?
+- [ ] rule of 2 leads to recovery
 
 -->
 
@@ -453,7 +443,7 @@ routeAlias: losing-writes
 clicks: 3
 ---
 
-# Promoting a node that's behind
+# Promoting the wrong sequencer
 
 The serving node is the most ahead — promote one that's behind and new appends land at offsets that already mean something else
 
@@ -470,7 +460,7 @@ routeAlias: split-brain
 clicks: 4
 ---
 
-# Two sequencers, corrupted log
+# Promoting two sequencers
 
 Promote a second sequencer while the first is only *presumed* dead — when it comes back, both have stamped different records at the same offsets
 
@@ -515,36 +505,17 @@ And other ugly truths
 
 ---
 layout: section
-routeAlias: drawbacks
----
-
-# Bottlenecks
-
-<!--
-
-- [ ] bottlenecks: sequencer, but also full fleet
-
--->
-
----
-layout: section
 routeAlias: usage
 ---
 
 # All this for state machine replication
 
-<!-- Thinking about whether this goes before or after architecture -->
-
----
-routeAlias: paradox
----
-
-# A sort of paradox
-
+<!--
 - We wanted to make it really easy to use; primitives are pub/sub; component
   architecture for composition
 - It is very flexible, if you know what you're doing
 - But people did some very cool things with it
+-->
 
 ---
 routeAlias: rocksdb
@@ -570,7 +541,7 @@ clicks: 2
 <EventualConsistency class="mt-8" />
 
 ---
-routeAlias: blackbox
+routeAlias: history
 ---
 
 # The log as a history
@@ -586,9 +557,16 @@ layout: section
 routeAlias: end
 ---
 
-# it's over
+# it's over?
 
 ---
+layout: section
+routeAlias: endend
+---
+
+# ok now it's over
+
+<https://dpatti.com>
 
 <!--
 
