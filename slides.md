@@ -147,22 +147,14 @@ clicks: 10
 
 <!--
 
-- You do not process your update at the time you send it
-- You don't wait for an "ack" for an append
-- You get the ability to recover quite easily, even mid-operation
-- There's something really satisfying about the purity of state machines and
-  your ability to reason about them
-- You can build hot-hot replicas really easily
-- You have a framework for thinking about race conditions
 
-> Ordering is consensus. All race conditions are settled with the log. e.g.,
-> two people buying tickets for a concert - who wins? whoever came first on the
-> log. and importantly, all nodes in the system can agree on that.
+[click:5] you don't process your update; something might race
 
-Downsides:
+[click:1] you also don't wait for an ack on the append
 
-- You still have to deal with I/O
-- ...
+[click:2] you have to deal with the race condition
+
+[click:2] you occasionally snapshot
 
 -->
 
@@ -175,21 +167,52 @@ routeAlias: dreams-and-reality
 
 ::left::
 
+<v-click>
+
 ## Total ordering is great
 
-- Useful foundation to build simple and complex apps alike
+</v-click>
+
+<v-clicks>
+
+- Foundation for both simple and complex apps
+- Ability to recover after a crash
+- Pure state machines are very satisfying
+- Total ordering is *consensus*
+
+</v-clicks>
 
 ::right::
 
-## Total ordering is hard
+<v-click>
 
-- The easiest way to scale is to shard, and when you do that, you give up total
-  ordering (kinda)
-- It's easier to build on fast and responsive logs
-- The utility goes down the more you have to compromise
+## It's also harder to scale
+
+</v-click>
+
+<v-clicks>
+
+- Shard the log?
+- Operate on bigger batches?
+
+</v-clicks>
+
+<style>
+.two-cols-header {
+  column-gap: 3rem;
+}
+</style>
 
 <!--
 
+Talk about single sequencer?
+
+- [click] All race conditions are settled with the log. e.g., two people buying
+  tickets for a concert - who wins? whoever came first on the log. and
+  importantly, all nodes in the system can agree on that.
+
+
+- The utility goes down the more you have to compromise
 - [ ] Total ordering means one process: a sequencer
 - [ ] "maximize total ordering"
 - If everyone is thinking about the same log as the source of truth, we want to
@@ -203,31 +226,42 @@ routeAlias: aria-goal
 
 # We made Aria to be generally useful
 
-How far can we push fast, low-latency total ordering without sharding?
+<!-- - [ ] "Generally" meaning "general to the firm"
+     - [ ] Also "generally useful" is weak
+-->
 
-1. Speed
-1. Scale
-1. Reliability
-1. Suitable for us
+How far can we push fast, low-latency total ordering within one shard?
 
-## Latency and throughput numbers
+- Speed
+- Scale
+- Reliability
 
-- Theoretically: 30us round trip times
-- Practically: depends on how far away from the cluster you are
-- Throughput: 10Gbps or ~20M appends/s
+<v-click>
+
+|                | Theoretical             | Practical                          |
+| -------------- | ----------------------- | ---------------------------------- |
+| **Latency**    | 30us round-trip         | depends on distance to the cluster |
+| **Throughput** | 10Gbps / ~20M appends/s | depends on fanout needs            |
+
+</v-click>
+
+<v-click>
 
 ## But a quick reality check
 
 This isn't like, the backbone of Jane Street or something
 
+</v-click>
+
 <!--
+
+We still do shard. There's not just "one" Aria: each region has at least one,
+some special use-cases get one, some in trading datacenters, some in the cloud
 
 Reliable: availability, latency (tails), durability
 
 latency: kind of low because it's JS
 
-But also: there's not just "one" Aria: each region has at least one, some
-special use-cases get one, some in trading datacenters, some in the cloud
 
 -->
 
@@ -339,6 +373,7 @@ graph LR
     producers:::client@{ shape: st-rect, label: "clients" }
     consumers-1:::client@{ shape: st-rect, label: "clients" }
     consumers-2:::client@{ shape: st-rect, label: "clients" }
+    network
     subgraph aria [" "]
       subgraph node-1 [" "]
         injectors-1:::core@{ shape: st-rect, label: "injectors" }
@@ -373,7 +408,6 @@ graph LR
         disk-3 e13@--> publishers-3
         class e11,e12 inactive-edge
       end
-      network
     end
     %% aria is only a layout container; hide its panel
     style aria fill:none,stroke:none
@@ -388,9 +422,12 @@ graph LR
   publishers-1 ~~~ producers
   publishers-2 --> producers & consumers-1
   publishers-3 --> consumers-2
-  network ~~~ node-1
-  network en1@-.-> node-2 & node-3
-  node-1 en2@-.-> network
+  network:::net@{ shape: hex, label: "network" }
+  network en2@-.-> node-2
+  network en3@-.-> node-3
+  node-1 en1@-.-> network
+  classDef net-edge stroke:#fb923c,stroke-width:2px
+  class en1,en2,en3 net-edge
   %% sequencer-1 & sequencer-2 --- sequencer-1 & sequencer-2
   %% sequencer-1 e99@--> mcast
   %% sequencer-2 ~~~ disk-1
@@ -415,11 +452,14 @@ graph LR
 
 ---
 routeAlias: fault-tolerance
+clicks: 3
 ---
 
 # Fault tolerance
 
 And other ugly truths
+
+<FaultTolerance />
 
 <!--
 
@@ -461,7 +501,7 @@ routeAlias: usage
 
 # All this for state machine replication
 
-<!-- Thinking about whether htis goes before or after architecture -->
+<!-- Thinking about whether this goes before or after architecture -->
 
 ---
 routeAlias: paradox

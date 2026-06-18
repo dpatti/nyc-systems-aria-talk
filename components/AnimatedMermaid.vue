@@ -16,7 +16,10 @@ mermaid.initialize(mermaidConfig)
 // `steps` groups edge ids per click; only the current group animates (previous
 // ones turn off), so each click focuses on one segment. Without `steps`, edges
 // reveal one-per-click cumulatively in the order their ids appear.
-const props = defineProps<{ code: string; steps?: string[][] }>()
+// `frames`: render a distinct full diagram per click (frames[$clicks]) — for
+// step-throughs that restyle nodes, not just animate edges. Takes precedence
+// over `code`/`steps`.
+const props = defineProps<{ code?: string; steps?: string[][]; frames?: string[] }>()
 const { $clicks } = useSlideContext()
 const el = ref<HTMLDivElement>()
 // Unique per instance: presenter mode mounts several AnimatedMermaids at once,
@@ -34,9 +37,9 @@ let host: HTMLDivElement | undefined
 
 const DIM = '#6b7280' // gray-500 — non-animated edges while a segment is active
 
-const edges = [...new Set([...props.code.matchAll(/\b(e\d+)@/g)].map((m) => m[1]))]
+const edges = [...new Set([...(props.code ?? '').matchAll(/\b(e\d+)@/g)].map((m) => m[1]))]
 // Tell the caller how many clicks this diagram needs.
-defineExpose({ clicks: props.steps?.length ?? edges.length })
+defineExpose({ clicks: props.frames ? props.frames.length - 1 : (props.steps?.length ?? edges.length) })
 
 // While any edge is animating, gray out the rest so the active segment stands
 // out. Arrowhead markers are shared across edges, so we clone a dim variant and
@@ -67,9 +70,15 @@ function dimOthers(root: HTMLElement) {
 
 async function render() {
   const c = $clicks.value ?? 0
-  const active = props.steps ? (props.steps[c - 1] ?? []) : edges.slice(0, c)
-  const anim = active.map((e) => `${e}@{ animate: true }`).join('\n')
-  const { svg } = await mermaid.render(`mermaid-${uid}-${n++}`, `${props.code}\n${anim}`, host)
+  let code: string
+  if (props.frames) {
+    code = props.frames[Math.min(c, props.frames.length - 1)] ?? props.frames[0]
+  } else {
+    const active = props.steps ? (props.steps[c - 1] ?? []) : edges.slice(0, c)
+    const anim = active.map((e) => `${e}@{ animate: true }`).join('\n')
+    code = `${props.code ?? ''}\n${anim}`
+  }
+  const { svg } = await mermaid.render(`mermaid-${uid}-${n++}`, code, host)
   if (el.value) {
     el.value.innerHTML = svg
     dimOthers(el.value)

@@ -23,6 +23,8 @@ const special = blue // core Aria nodes (`:::core`, `:::primary`, `box*`)
 const specialFill = '#60a5fa1f' // blue-400 ~12% tint
 const ink = '#e5e7eb' // edges, node borders, text (bright neutral)
 const dim = '#6b7280'
+const net = '#fb923c' // orange-400 — network node + replication (distinct from green/blue)
+const netFill = '#fb923c1f'
 
 // Exported so AnimatedMermaid can initialize the singleton itself. Slidev only
 // applies this config when *it* renders a mermaid block, which may not have
@@ -35,7 +37,7 @@ export const mermaidConfig = {
     // mermaid elk integration seems to be questionable.
     // nodePlacementStrategy: 'BRANDES_KOEPF',
     // nodePlacementAlignment: 'NONE',
-    cycleBreakingStrategy: 'MODEL_ORDER',
+    cycleBreakingStrategy: 'GREEDY_MODEL_ORDER',
     considerModelOrder: 'PREFER_NODES',
     forceNodeModelOrder: true,
   },
@@ -51,6 +53,7 @@ export const mermaidConfig = {
     .core rect, .core .basic, .core path, .core polygon,
     .primary rect, .primary .basic, .primary path, .primary polygon { stroke: ${special}; fill: ${specialFill}; }
     .client rect, .client .basic, .client path, .client polygon { stroke: ${client.base}; fill: ${client.fill}; }
+    .net rect, .net .basic, .net path, .net polygon { stroke: ${net}; fill: ${netFill}; }
     .inactive { opacity: 0.3; }
   `,
   themeVariables: {

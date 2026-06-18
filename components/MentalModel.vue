@@ -126,14 +126,16 @@ const ownTop = computed(() => (committed.value ? TAPE_TOP : smTop))
     <!-- our appended record: staged (dashed, beside SM) → committed (in the tape) -->
     <div
       v-if="showAppend"
-      class="absolute w-14 h-14 border-2 rounded transition-all duration-500"
+      class="absolute w-14 h-14 flex items-center justify-center text-teal-300 text-2xl leading-none border-2 rounded transition-all duration-500"
       :class="
         committed
           ? [solidTeal, readCol === OWN_COL ? ring : '']
           : 'border-dashed border-teal-400'
       "
       :style="{ left: `${ownLeft}px`, top: `${ownTop}px` }"
-    />
+    >
+      ✳
+    </div>
     <div
       v-if="showAppendArrow"
       class="absolute text-2xl leading-none text-teal-400 text-center rotate-90"
