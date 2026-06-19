@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@mermaid-js/layout-elk": "^0.2.1",
-    "@slidev/cli": "^52.16.0",
+    "@slidev/cli": "^52.15.2",
     "@slidev/theme-default": "latest",
     "@slidev/theme-seriph": "latest",
     "vue": "^3.5.35"
