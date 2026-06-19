@@ -271,7 +271,7 @@ routeAlias: architecture
 
 ---
 routeAlias: speed
-clicks: 3
+clicks: 4
 ---
 
 # Designing for speed
@@ -301,7 +301,7 @@ graph LR
 `
 </script>
 
-<AnimatedMermaid :code="cheapAppends" :steps="[['e1'], ['e2', 'e3'], ['e4', 'e5', 'e6', 'e7']]" />
+<AnimatedMermaid :code="cheapAppends" :steps="[['e1'], ['e2', 'e3'], ['e4', 'e5', 'e6', 'e7'], ['e1', 'e2', 'e3', 'e4', 'e5']]" />
 
 <!--
 
