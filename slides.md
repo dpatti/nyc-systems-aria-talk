@@ -1,5 +1,6 @@
 ---
 theme: default
+colorSchema: dark
 title: Building a fast log with a smidge of fault-tolerance
 info: |
   Distributed logs sit at the heart of many complex distributed systems, but you
