@@ -63,8 +63,8 @@ I'm Doug
 
 <div class="text-center">
 
-![](./podcast.png){class="inline-block h-80 mr-8 mt-8 shadow"}
-![](./blog.png){class="inline-block h-80 mt-8 shadow"}
+![](./assets/podcast.png){class="inline-block h-80 mr-8 mt-8 shadow"}
+![](./assets/blog.png){class="inline-block h-80 mt-8 shadow"}
 
 </div>
 
@@ -88,8 +88,8 @@ routeAlias: confession
 # A confession
 [](no-subtitle-hack) <!-- otherwise the images become a subtitle -->
 
-![](./receipt.png){v-click="", class="inline-block h-80 mr-8 mt-8 shadow"}
-![](./ddia.png){v-click="", class="inline-block h-80 mt-8 shadow"}
+![](./assets/receipt.png){v-click="", class="inline-block h-80 mr-8 mt-8 shadow"}
+![](./assets/ddia.png){v-click="", class="inline-block h-80 mt-8 shadow"}
 
 <!--
 
