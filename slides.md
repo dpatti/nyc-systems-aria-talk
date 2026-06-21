@@ -158,7 +158,8 @@ and historically allergic to databases
 - Aria is not the first log abstraction we've built, nor is it the second or third
 - We *do* use dbs, but for a number of reasons, they haven't been the easy choice
 - (though this is changing)
-- [ ] something about dbs that is more satisfying
+- It isn't one vs the other
+- Motivating logs: power in how you express change, test, introspect, debug
 
 -->
 
@@ -173,6 +174,8 @@ clicks: 11
 
 <!--
 
+- Example for orienting: TODO (dispatching a request? bank transer? breaking
+  down work?)
 - We start with a log that contains lots of records from different components in
   our service
 - [click] We build a state machine, but it doesn't want every message
@@ -515,6 +518,8 @@ Not really, I was going to talk about more things but it got long
 But in all, total ordering is great and powerful especially when you can afford
 it
 
+Here's the rest of the slides, don't blink
+
 -->
 
 ---
@@ -539,6 +544,16 @@ clicks: 2
 - Your region's view is the global log plus the unrelayed region tail
 
 <EventualConsistency class="mt-8" />
+
+---
+routeAlias: history
+---
+
+# The log as a history
+
+- Time-travel interactive debugger -- with breakpoints
+- Replay into the same state machine for bug or performance analysis
+- Build one-off tools that use the log as a query
 
 ---
 layout: section
